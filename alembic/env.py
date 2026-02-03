@@ -1,5 +1,6 @@
 """Alembic env: sync engine only (no async URL)."""
 import logging
+import sys
 from logging.config import fileConfig
 
 from alembic import context
@@ -12,6 +13,16 @@ from core.database.models import Base
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# Логи Alembic в stdout, чтобы Railway не помечал их как error (stderr = error в платформе)
+for _name in ("alembic", "alembic.env", "alembic.runtime", "alembic.runtime.migration"):
+    _log = logging.getLogger(_name)
+    _log.handlers.clear()
+    _h = logging.StreamHandler(sys.stdout)
+    _h.setLevel(logging.INFO)
+    _h.setFormatter(logging.Formatter("%(levelname)-5.5s [%(name)s] %(message)s"))
+    _log.addHandler(_h)
+    _log.setLevel(logging.INFO)
 
 target_metadata = Base.metadata
 

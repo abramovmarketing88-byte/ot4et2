@@ -81,11 +81,16 @@
 - **Build Command**: можно оставить по умолчанию (при использовании Dockerfile сборка идёт через Docker).
 - **Root Directory**: если бот в подпапке репозитория (например `avito_analytics_bot`), укажите эту папку в настройках сервиса.
 
-### 4.2 Команда запуска (Start Command)
+### 4.2 Команда запуска (Start Command) — важно
 
-В **Dockerfile** уже прописано: при старте контейнера выполняются миграции (`alembic upgrade head`), затем запускается бот (`python main.py`). На Railway при деплое из этого репозитория **Start Command можно не менять** — используется команда из Dockerfile.
+В **Dockerfile** по умолчанию запускается скрипт **`./run.sh`**: миграции (`alembic upgrade head`), затем **бесконечный** процесс бота (`python main.py`).
 
-Если деплоите без Dockerfile (Nixpacks) и есть **Procfile** с строкой `worker: alembic upgrade head && python main.py`, Railway подхватит её для процесса типа worker. При необходимости можно вручную задать Start Command в настройках сервиса: `alembic upgrade head && python main.py`.
+**В Railway → сервис worker → Settings → Custom Start Command:**
+
+- **Либо оставьте поле пустым** — тогда будет использоваться команда из Dockerfile (`./run.sh`), бот будет работать постоянно.
+- **Либо укажите ровно:** `./run.sh`
+
+**Не указывайте** только `alembic upgrade head && python main.py`: при переопределении команды легко допустить ошибку, и контейнер после миграций может завершаться (статус "Completed" вместо постоянной работы). В логах при этом видны только сообщения Alembic, без строк вида `!!! [run.sh] ALEMBIC DONE, STARTING PYTHON !!!` и логов бота. Если видите только Alembic и статус "Completed" — очистите Custom Start Command и передеплойте.
 
 ### 4.3 Порт
 
