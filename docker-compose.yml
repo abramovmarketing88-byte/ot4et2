@@ -1,0 +1,19 @@
+# PostgreSQL для локального тестирования бота
+# Запуск: docker-compose up -d
+# DATABASE_URL=postgresql+asyncpg://avito:avito@localhost:5432/avito_bot
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: avito_bot_pg
+    environment:
+      POSTGRES_USER: avito
+      POSTGRES_PASSWORD: avito
+      POSTGRES_DB: avito_bot
+    ports:
+      - "5432:5432"
+    volumes:
+      - avito_bot_pgdata:/var/lib/postgresql/data
+
+volumes:
+  avito_bot_pgdata:
