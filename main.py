@@ -33,8 +33,23 @@ BOT_COMMANDS = [
 ]
 
 
+def _mask_db_url(url: str) -> str:
+    """Mask password in DATABASE_URL for logging."""
+    try:
+        from urllib.parse import urlparse, urlunparse
+        p = urlparse(url)
+        if p.password:
+            netloc = f"{p.username or ''}:****@{p.hostname or ''}" + (f":{p.port}" if p.port else "")
+            return urlunparse((p.scheme, netloc, p.path or "", "", "", ""))
+    except Exception:
+        pass
+    return "***"
+
+
 async def on_startup(bot: Bot) -> None:
     """Инициализация при старте: меню команд, БД и планировщик."""
+    from core.config import settings
+    logger.info("Bot DATABASE_URL (async): %s", _mask_db_url(settings.DATABASE_URL))
     await bot.set_my_commands(BOT_COMMANDS)
     await init_db()
     await start_scheduler(bot)

@@ -1,17 +1,41 @@
-"""Async SQLAlchemy 2.0 engine and sessionmaker."""
+"""Async SQLAlchemy 2.0 engine and sessionmaker. Main app uses postgresql+asyncpg."""
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from core.config import settings
 from core.database.models import Base
 
-# Для SQLite создаём каталог data/
+logger = logging.getLogger(__name__)
+
+# Main app: keep postgresql+asyncpg for AsyncSession (do not change to sync URL).
 _url = settings.DATABASE_URL
 if _url.startswith("sqlite"):
     Path("./data").mkdir(exist_ok=True)
+
+
+def _mask_url(url: str) -> str:
+    """Mask password in URL for logging."""
+    try:
+        from urllib.parse import urlparse, urlunparse
+        p = urlparse(url)
+        if p.password:
+            netloc = p.hostname or ""
+            if p.port:
+                netloc += f":{p.port}"
+            if p.username:
+                netloc = f"{p.username}:****@{netloc}"
+            else:
+                netloc = f"****@{netloc}"
+            return urlunparse((p.scheme, netloc, p.path or "", "", "", ""))
+    except Exception:
+        return url[:50] + "..." if len(url) > 50 else "***"
+
+
+logger.info("Bot AsyncSession using URL: %s", _mask_url(_url))
 
 async_engine = create_async_engine(
     _url,
