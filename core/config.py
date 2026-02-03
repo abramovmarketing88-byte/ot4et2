@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     AVITO_REDIRECT_URI: str = ""
     ADMIN_CHAT_ID: int | None = None
 
+    # Worker: retry и таймауты (опционально через env)
+    WORKER_STARTUP_TIMEOUT_SEC: int = 60
+    WORKER_STARTUP_RETRIES: int = 5
+    WORKER_POLLING_RETRIES: int = 10
+    WORKER_RETRY_BACKOFF_BASE_SEC: int = 5
+    WORKER_RETRY_BACKOFF_MAX_SEC: int = 300
+
     @field_validator("ADMIN_CHAT_ID", mode="before")
     @classmethod
     def empty_admin_chat(cls, v: str | int | None) -> int | None:
