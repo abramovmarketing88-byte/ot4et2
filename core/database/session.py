@@ -35,7 +35,9 @@ def _mask_url(url: str) -> str:
         return url[:50] + "..." if len(url) > 50 else "***"
 
 
-logger.info("Bot AsyncSession using URL: %s", _mask_url(_url))
+_masked_url = _mask_url(_url)
+print(f"Бот подключается к БД: {_masked_url}")
+logger.info("AsyncSession использует URL: %s", _masked_url)
 
 async_engine = create_async_engine(
     _url,

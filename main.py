@@ -4,6 +4,9 @@
 import asyncio
 import logging
 
+# Самый первый вывод — до любых импортов bot/core (если это видно в логах, main.py точно запускается)
+print("!!! MAIN.PY: начало загрузки !!!", flush=True)
+
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -16,6 +19,9 @@ from bot.handlers.reports import router as reports_router
 from bot.middleware import DbSessionMiddleware
 from core.database.session import async_engine, init_db
 from core.scheduler import start_scheduler, stop_scheduler
+
+logging.basicConfig(level=logging.INFO)
+logging.info("!!! ЗАПУСК MAIN.PY !!!")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,47 +55,56 @@ def _mask_db_url(url: str) -> str:
 async def on_startup(bot: Bot) -> None:
     """Инициализация при старте: меню команд, БД и планировщик."""
     from core.config import settings
-    logger.info("Bot DATABASE_URL (async): %s", _mask_db_url(settings.DATABASE_URL))
+    logger.info("DATABASE_URL (async): %s", _mask_db_url(settings.DATABASE_URL))
     await bot.set_my_commands(BOT_COMMANDS)
     await init_db()
     await start_scheduler(bot)
-    logger.info("Bot started.")
+    logger.info("Бот запущен.")
 
 
 async def on_shutdown(bot: Bot) -> None:
     """Остановка планировщика и закрытие соединений."""
     await stop_scheduler()
     await async_engine.dispose()
-    logger.info("Bot stopped.")
+    logger.info("Бот остановлен.")
 
 
 async def main() -> None:
-    from core.config import settings
+    try:
+        logging.info("Инициализация бота и диспетчера...")
+        from core.config import settings
 
-    bot = Bot(
-        token=settings.BOT_TOKEN,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
-    )
-    dp = Dispatcher()
-    dp["bot"] = bot
+        bot = Bot(
+            token=settings.BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
+        dp = Dispatcher()
+        dp["bot"] = bot
 
-    # Одна сессия БД на апдейт — передаётся в data["session"]
-    dp.update.middleware(DbSessionMiddleware())
+        # Одна сессия БД на апдейт — передаётся в data["session"]
+        dp.update.middleware(DbSessionMiddleware())
 
-    # Глобальный обработчик ошибок: уведомление админа при ошибке токена Avito
-    async def error_handler(event: object) -> None:
-        await global_error_handler(event, bot)
+        # Глобальный обработчик ошибок: уведомление админа при ошибке токена Avito
+        async def error_handler(event: object) -> None:
+            await global_error_handler(event, bot)
 
-    dp.errors.register(error_handler)
+        dp.errors.register(error_handler)
 
-    dp.include_router(register_router)
-    dp.include_router(profiles_router)
-    dp.include_router(reports_router)
+        dp.include_router(register_router)
+        dp.include_router(profiles_router)
+        dp.include_router(reports_router)
 
-    dp.startup.register(on_startup)
-    dp.shutdown.register(on_shutdown)
+        dp.startup.register(on_startup)
+        dp.shutdown.register(on_shutdown)
 
-    await dp.start_polling(bot)
+        # Ensure long polling: remove webhook if it was set (e.g. by another deployment)
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("Диспетчер запущен.")
+        logger.info("Бот переходит в режим long polling...")
+        await dp.start_polling(bot)
+    except Exception as e:
+        logging.error("КРИТИЧЕСКАЯ ОШИБКА ПРИ ЗАПУСКЕ: %s", e, exc_info=True)
+        raise
 
 
 if __name__ == "__main__":

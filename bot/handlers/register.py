@@ -1,14 +1,18 @@
 """
 Handler для команды /start.
 """
+import logging
+
 from aiogram import Router
 from aiogram.filters import CommandStart
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database.models import User
 
+logger = logging.getLogger(__name__)
 router = Router(name="register")
 
 
@@ -28,8 +32,12 @@ async def get_or_create_user(telegram_id: int, session: AsyncSession) -> User:
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, session: AsyncSession) -> None:
-    """Приветствие и регистрация пользователя."""
+async def cmd_start(
+    message: Message, session: AsyncSession, state: FSMContext
+) -> None:
+    """Приветствие и регистрация пользователя. Всегда сбрасывает FSM (выход из сценариев)."""
+    logger.info("Команда /start: user_id=%s", message.from_user.id if message.from_user else None)
+    await state.clear()
     telegram_id = message.from_user.id if message.from_user else 0
     await get_or_create_user(telegram_id, session)
     await message.answer(

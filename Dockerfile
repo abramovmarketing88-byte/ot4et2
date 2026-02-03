@@ -14,5 +14,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Миграции при старте, затем запуск бота (удобно для Railway и др.)
-CMD ["sh", "-c", "alembic upgrade head && exec python main.py"]
+# Миграции при старте, затем запуск бота. Эхо перед python — в логах видно, доходит ли выполнение до main.py.
+CMD ["sh", "-c", "alembic upgrade head && echo '!!! ALEMBIC DONE, STARTING PYTHON !!!' && exec python main.py"]
