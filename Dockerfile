@@ -14,5 +14,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Запуск: миграции + бот (небуферизованный вывод)
-CMD ["sh", "-c", "alembic upgrade head && python -u main.py 2>&1"]
+# Запуск: через скрипт с подробной диагностикой
+RUN chmod +x start.sh
+CMD ["./start.sh"]
