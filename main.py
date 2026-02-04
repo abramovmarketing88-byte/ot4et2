@@ -1,6 +1,7 @@
 print(">>> DEBUG: PYTHON SCRIPT STARTED")
 import sys
 import logging
+print(">>> DEBUG: PYTHON SCRIPT STARTED (stderr)", file=sys.stderr, flush=True)
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 logger.info(">>> DEBUG: LOGGING INITIALIZED")
