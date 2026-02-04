@@ -13,7 +13,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-RUN chmod +x run.sh
 
-# run.sh: эхо до/после Alembic и python -u (небуферизованный вывод), чтобы в логах Railway было видно прогресс и ошибки
-CMD ["./run.sh"]
+# Запуск: миграции + бот (небуферизованный вывод)
+CMD ["sh", "-c", "alembic upgrade head && python -u main.py"]

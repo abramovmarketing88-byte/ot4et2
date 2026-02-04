@@ -1,21 +1,18 @@
+print(">>> DEBUG: PYTHON SCRIPT STARTED")
+import sys
+import logging
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+logger.info(">>> DEBUG: LOGGING INITIALIZED")
+
 """
 Точка входа: фоновый worker (Telegram long-polling бот), БД, планировщик.
 Работает непрерывно до явной остановки. Поддерживает retry, таймауты и корректное завершение по SIGTERM/SIGINT.
 """
 import asyncio
-import logging
 import signal
-import sys
 
-# Единая настройка логирования до любых импортов приложения
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    stream=sys.stdout,
-    force=True,
-)
-logger = logging.getLogger(__name__)
+# Логирование уже настроено в самом начале файла
 
 # Константы по умолчанию для worker (переопределяются из core.config.settings)
 DEFAULT_STARTUP_TIMEOUT_SEC = 60
@@ -152,8 +149,14 @@ async def _run_polling_until_shutdown(bot: Bot, dp: Dispatcher) -> None:
     Запустить long polling. Работает до отмены задачи (SIGTERM/SIGINT) или ошибки.
     (delete_webhook выполняется в фазе startup.)
     """
-    logger.info("Диспетчер запущен, переход в режим long polling (worker работает непрерывно).")
-    await dp.start_polling(bot)
+    try:
+        logger.info("Starting bot...")
+        logger.info("Диспетчер запущен, переход в режим long polling (worker работает непрерывно).")
+        await dp.start_polling(bot)
+    except Exception as e:
+        print(f">>> DEBUG: CRITICAL STARTUP ERROR: {str(e)}")
+        logger.exception("Bot failed to start")
+        sys.exit(1)
 
 
 async def _backoff_sleep(attempt: int, phase: str) -> None:

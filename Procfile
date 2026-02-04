@@ -1,1 +1,1 @@
-worker: alembic upgrade head && python main.py
+worker: sh -c "alembic upgrade head && python -u main.py"
