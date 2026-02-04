@@ -39,18 +39,23 @@ def _request_shutdown() -> None:
 
 
 # Импорты приложения после настройки логов
-from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-from aiogram.types import BotCommand
+try:
+    from aiogram import Bot, Dispatcher
+    from aiogram.client.default import DefaultBotProperties
+    from aiogram.enums import ParseMode
+    from aiogram.types import BotCommand
 
-from bot.errors import global_error_handler
-from bot.handlers.register import router as register_router
-from bot.handlers.profiles import router as profiles_router
-from bot.handlers.reports import router as reports_router
-from bot.middleware import DbSessionMiddleware
-from core.database.session import async_engine, init_db
-from core.scheduler import start_scheduler, stop_scheduler
+    from bot.errors import global_error_handler
+    from bot.handlers.register import router as register_router
+    from bot.handlers.profiles import router as profiles_router
+    from bot.handlers.reports import router as reports_router
+    from bot.middleware import DbSessionMiddleware
+    from core.database.session import async_engine, init_db
+    from core.scheduler import start_scheduler, stop_scheduler
+except Exception as e:
+    print(f">>> DEBUG: IMPORT ERROR: {e}", flush=True)
+    logger.exception("Failed during module imports")
+    sys.exit(1)
 
 BOT_COMMANDS = [
     BotCommand(command="start", description="Запуск и список команд"),

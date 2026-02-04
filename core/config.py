@@ -1,4 +1,7 @@
 """Конфигурация из переменных окружения."""
+import logging
+import sys
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -34,4 +37,12 @@ class Settings(BaseSettings):
         return int(v) if isinstance(v, str) else v
 
 
-settings = Settings()
+logger = logging.getLogger(__name__)
+
+try:
+    settings = Settings()
+except Exception as e:
+    # Частая причина: отсутствует BOT_TOKEN или неверный формат DATABASE_URL
+    print(f">>> DEBUG: SETTINGS ERROR: {e}", file=sys.stderr, flush=True)
+    logger.exception("Failed to load settings from environment")
+    raise
