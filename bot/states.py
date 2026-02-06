@@ -28,3 +28,10 @@ class SettingsStates(StatesGroup):
     choosing_days = State()
     choosing_period = State()
     waiting_interval = State()
+    waiting_interval_value = State()  # для "Every X days"
+
+
+class HistoricalReportStates(StatesGroup):
+    """Исторический отчёт: ввод периода."""
+    waiting_start_date = State()
+    waiting_end_date = State()

@@ -83,12 +83,12 @@ def _mask_db_url(url: str) -> str:
 
 
 async def on_startup(bot: Bot) -> None:
-    """Инициализация при старте: меню команд, БД и планировщик."""
+    """Инициализация при старте: меню команд, БД, планировщик и синхронизация джобов отчётов."""
     from core.config import settings
     logger.info("DATABASE_URL (async): %s", _mask_db_url(settings.DATABASE_URL))
     await bot.set_my_commands(BOT_COMMANDS)
     await init_db()
-    await start_scheduler(bot)
+    await start_scheduler(bot)  # запуск APScheduler + первичный sync_scheduler_tasks()
     logger.info("Бот запущен, планировщик активен.")
 
 
@@ -137,6 +137,7 @@ async def _create_bot_and_dispatcher():
     dp = Dispatcher()
     dp["bot"] = bot
 
+    # Одна сессия БД на апдейт — доступна во всех хендлерах как data["session"]
     dp.update.middleware(DbSessionMiddleware())
 
     async def error_handler(event: object) -> None:

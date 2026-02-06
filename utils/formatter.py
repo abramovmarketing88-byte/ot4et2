@@ -1,8 +1,7 @@
 """
-Форматирование отчётов для Telegram (MarkdownV2).
-
-Поддержка выбора характеристик: selected_metrics — список ключей (пусто = все).
+Форматирование отчётов для Telegram (MarkdownV2) и экспорт чатов в Excel.
 """
+import io
 import re
 from typing import Optional
 
@@ -126,3 +125,66 @@ _{profile_esc}_
 ```
 {error_esc}
 ```"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Excel export (чаты / сообщения)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def export_chats_to_excel(chats_data: list[dict]) -> io.BytesIO:
+    """
+    Формирует Excel-файл с чатами и сообщениями для отправки в Telegram.
+
+    :param chats_data: список словарей по одному на чат. Ожидаемые ключи:
+        - chat_name или opponent: название/имя оппонента
+        - last_message: текст последнего сообщения
+        - date: дата последнего сообщения (str или datetime)
+        - all_messages: текст всех сообщений (один блок: время + автор + текст по строкам)
+    :return: io.BytesIO с xlsx, готов к отправке (buffer.seek(0) перед отправкой).
+    """
+    import pandas as pd
+
+    rows: list[dict[str, str]] = []
+    for chat in chats_data:
+        name = chat.get("chat_name") or chat.get("opponent") or chat.get("chat_id") or "—"
+        last_msg = chat.get("last_message") or "—"
+        date_val = chat.get("date")
+        if date_val is not None and hasattr(date_val, "strftime"):
+            date_str = date_val.strftime("%Y-%m-%d %H:%M")
+        else:
+            date_str = str(date_val) if date_val else "—"
+        all_msgs = chat.get("all_messages")
+        if isinstance(all_msgs, list):
+            all_msgs_str = "\n".join(
+                str(m) if not isinstance(m, dict) else _format_message_line(m)
+                for m in all_msgs
+            )
+        else:
+            all_msgs_str = str(all_msgs) if all_msgs else "—"
+        rows.append({
+            "Chat Name / Opponent": name,
+            "Last Message": last_msg,
+            "Date": date_str,
+            "All Messages": all_msgs_str,
+        })
+
+    df = pd.DataFrame(rows)
+    buf = io.BytesIO()
+    df.to_excel(buf, index=False, engine="openpyxl")
+    buf.seek(0)
+    return buf
+
+
+def _format_message_line(msg: dict) -> str:
+    """Один блок сообщения для колонки All Messages: дата + автор + текст."""
+    created = msg.get("created") or msg.get("date") or ""
+    if hasattr(created, "strftime"):
+        created = created.strftime("%Y-%m-%d %H:%M")
+    author = msg.get("author_id") or msg.get("author") or "?"
+    content = msg.get("content", {})
+    if isinstance(content, dict):
+        text = content.get("text") or content.get("message") or ""
+    else:
+        text = str(content)
+    return f"{created} | {author}: {text}"

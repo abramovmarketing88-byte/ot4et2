@@ -253,6 +253,104 @@ async def cb_profile_delete_confirm(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Export Messenger to Excel (Account section)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@router.callback_query(F.data.startswith("export_messenger:"))
+async def cb_export_messenger(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Собрать чаты Avito Messenger и отправить Excel-файл пользователю."""
+    profile_id = int(callback.data.split(":")[1])
+    profile = await get_profile_by_id(profile_id, callback.from_user.id, session)
+    if not profile:
+        await callback.answer("Профиль не найден", show_alert=True)
+        return
+    if not profile.user_id:
+        await callback.answer(
+            "Сначала завершите настройку профиля (получен user_id Avito).",
+            show_alert=True,
+        )
+        return
+
+    await callback.answer("Формирую выгрузку чатов…")
+    status_msg = await callback.message.answer("⏳ Загружаю чаты и сообщения из Avito…")
+
+    try:
+        from core.avito.auth import AvitoAuth
+        from core.avito.client import AvitoClient
+        from utils.formatter import export_chats_to_excel
+        from aiogram.types import BufferedInputFile
+
+        auth = AvitoAuth(profile)
+        token = await auth.ensure_token()
+        client = AvitoClient(token)
+        user_id = profile.user_id
+
+        # Список чатов (может быть пагинация — берём первый блок)
+        conv = await client.get_conversations(user_id, limit=100, offset=0)
+        chats = conv.get("chats") or conv.get("resources") or []
+        if isinstance(chats, dict):
+            chats = [chats]
+
+        chats_data = []
+        for ch in chats:
+            chat_id = ch.get("id") or ch.get("chat_id")
+            if chat_id is None:
+                continue
+            context = ch.get("context") or {}
+            value = context.get("value", {}) if isinstance(context, dict) else {}
+            chat_name = value.get("title") or value.get("id") or str(chat_id)
+            last_msg = ch.get("last_message") or {}
+            if isinstance(last_msg, dict):
+                content = last_msg.get("content") or {}
+                last_text = content.get("text") or content.get("message") or ""
+                last_created = last_msg.get("created") or last_msg.get("date")
+            else:
+                last_text = ""
+                last_created = None
+
+            try:
+                msg_resp = await client.get_messages(user_id, chat_id, limit=100, offset=0)
+                messages = msg_resp.get("messages") or msg_resp.get("resources") or []
+                if isinstance(messages, dict):
+                    messages = [messages]
+            except Exception:
+                messages = []
+
+            chats_data.append({
+                "chat_name": chat_name,
+                "last_message": last_text,
+                "date": last_created,
+                "all_messages": messages,
+            })
+
+        if not chats_data:
+            await status_msg.edit_text(
+                "📭 Чатов не найдено или API не вернул данные. "
+                "Проверьте доступ к Messenger API и scope."
+            )
+            return
+
+        buf = export_chats_to_excel(chats_data)
+        file_bytes = buf.read()
+        document = BufferedInputFile(file_bytes, filename="avito_messenger_chats.xlsx")
+        await callback.bot.send_document(
+            chat_id=callback.message.chat.id,
+            document=document,
+            caption=f"📤 Выгрузка чатов Avito: {profile.profile_name}",
+        )
+        await status_msg.edit_text("✅ Файл отправлен выше.")
+    except Exception as e:
+        logger.exception("Export messenger failed for profile id=%s", profile_id)
+        await status_msg.edit_text(
+            f"❌ Ошибка выгрузки: <code>{e!s}</code>\n\n"
+            "Проверьте доступ к Messenger API (scope) и наличие чатов."
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Отмена FSM
 # ═══════════════════════════════════════════════════════════════════════════════
 

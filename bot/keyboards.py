@@ -23,7 +23,7 @@ def profiles_list_kb(profiles: list[AvitoProfile]) -> InlineKeyboardMarkup:
 
 
 def profile_actions_kb(profile_id: int) -> InlineKeyboardMarkup:
-    """Кнопки действий для профиля."""
+    """Кнопки действий для профиля (Account section)."""
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
@@ -34,6 +34,12 @@ def profile_actions_kb(profile_id: int) -> InlineKeyboardMarkup:
             text="🗑 Удалить",
             callback_data=f"profile_delete:{profile_id}",
         ),
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="📤 Export Messenger в Excel",
+            callback_data=f"export_messenger:{profile_id}",
+        )
     )
     builder.row(
         InlineKeyboardButton(text="« Назад", callback_data="profiles_back")
@@ -68,20 +74,30 @@ def report_settings_kb(profile_id: int) -> InlineKeyboardMarkup:
     )
     builder.row(
         InlineKeyboardButton(
+            text="📅 Исторический отчёт",
+            callback_data=f"report_historical:{profile_id}",
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
             text="📋 Настроить характеристики",
             callback_data=f"report_characteristics:{profile_id}",
         )
     )
     builder.row(
         InlineKeyboardButton(
-            text="💬 Установить чат",
-            callback_data=f"report_set_chat:{profile_id}",
+            text="🔄 Частота отчёта",
+            callback_data=f"report_frequency:{profile_id}",
+        ),
+        InlineKeyboardButton(
+            text="🕐 Установить время",
+            callback_data=f"report_set_time:{profile_id}",
         )
     )
     builder.row(
         InlineKeyboardButton(
-            text="🕐 Установить время",
-            callback_data=f"report_set_time:{profile_id}",
+            text="💬 Установить чат",
+            callback_data=f"report_set_chat:{profile_id}",
         )
     )
     builder.row(
@@ -147,6 +163,36 @@ def cancel_kb() -> InlineKeyboardMarkup:
     """Кнопка отмены."""
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel"))
+    return builder.as_markup()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Частота отчёта (Report Frequency submenu)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def report_frequency_kb(profile_id: int, current: str = "daily") -> InlineKeyboardMarkup:
+    """Подменю частоты: Daily, Every X days, Weekly, Monthly."""
+    builder = InlineKeyboardBuilder()
+    for freq, label in (
+        ("daily", "Ежедневно"),
+        ("interval", "Каждые N дней"),
+        ("weekly", "Еженедельно (выбор дней)"),
+        ("monthly", "Ежемесячно"),
+    ):
+        prefix = "✅" if freq == current else "⬜"
+        builder.row(
+            InlineKeyboardButton(
+                text=f"{prefix} {label}",
+                callback_data=f"freq_set:{profile_id}:{freq}",
+            )
+        )
+    builder.row(
+        InlineKeyboardButton(
+            text="« Назад",
+            callback_data=f"profile_report:{profile_id}",
+        )
+    )
     return builder.as_markup()
 
 

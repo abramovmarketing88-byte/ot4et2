@@ -18,9 +18,10 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards import report_settings_kb, report_characteristics_kb, set_chat_kb, cancel_kb
-from bot.states import ConfigureReportStates
+from bot.states import ConfigureReportStates, HistoricalReportStates
 from core.database.models import AvitoProfile, ReportTask
 from core.report_runner import run_report_to_chat
+from core.scheduler import sync_scheduler_tasks
 
 logger = logging.getLogger(__name__)
 router = Router(name="reports")
@@ -452,7 +453,7 @@ async def cb_report_set_time(
 async def process_report_time(
     message: Message, state: FSMContext, session: AsyncSession
 ) -> None:
-    """Обработка введённого времени."""
+    """Обработка введённого времени (HH:MM). Обновляет ReportTask и AvitoProfile.report_time."""
     time_text = message.text.strip()
 
     # Валидация формата ЧЧ:ММ
@@ -474,6 +475,11 @@ async def process_report_time(
         await state.clear()
         return
 
+    profile = await get_profile_by_id(profile_id, message.from_user.id, session)
+    if profile:
+        from datetime import time
+        profile.report_time = time(int(hours), int(minutes))
+
     result = await session.execute(
         select(ReportTask).where(ReportTask.profile_id == profile_id)
     )
@@ -484,8 +490,131 @@ async def process_report_time(
         task = ReportTask(profile_id=profile_id, chat_id=0, report_time=time_normalized)
         session.add(task)
 
+    await session.commit()
+    await sync_scheduler_tasks()
+
     await state.clear()
     await message.answer(
         f"✅ Время отчёта установлено: <b>{time_normalized}</b>\n\n"
-        "Используйте /profiles для дальнейшей настройки."
+        "Расписание обновлено. Используйте /profiles для других настроек."
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Исторический отчёт (Start Date / End Date)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _parse_yyyy_mm_dd(text: str) -> str | None:
+    """Проверка формата YYYY-MM-DD, возвращает нормализованную строку или None."""
+    text = text.strip()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", text):
+        return None
+    try:
+        from datetime import datetime
+        datetime.strptime(text, "%Y-%m-%d")
+        return text
+    except ValueError:
+        return None
+
+
+@router.callback_query(F.data.startswith("report_historical:"))
+async def cb_report_historical(
+    callback: CallbackQuery, state: FSMContext, session: AsyncSession
+) -> None:
+    """Запуск FSM ввода периода для исторического отчёта."""
+    profile_id = int(callback.data.split(":")[1])
+    profile = await get_profile_by_id(profile_id, callback.from_user.id, session)
+    if not profile:
+        await callback.answer("Профиль не найден", show_alert=True)
+        return
+    await state.update_data(profile_id=profile_id)
+    await state.set_state(HistoricalReportStates.waiting_start_date)
+    await callback.message.edit_text(
+        "📅 <b>Исторический отчёт</b>\n\n"
+        "Введите <b>дату начала</b> периода в формате <b>YYYY-MM-DD</b>\n"
+        "Например: <code>2025-01-01</code>",
+        reply_markup=cancel_kb(),
+    )
+    await callback.answer()
+
+
+@router.message(HistoricalReportStates.waiting_start_date, F.text)
+async def process_historical_start_date(
+    message: Message, state: FSMContext, session: AsyncSession
+) -> None:
+    """Приём даты начала периода."""
+    start = _parse_yyyy_mm_dd(message.text)
+    if not start:
+        await message.answer(
+            "❌ Неверный формат. Введите дату в формате <b>YYYY-MM-DD</b> (например, 2025-01-01):"
+        )
+        return
+    await state.update_data(start_date=start)
+    await state.set_state(HistoricalReportStates.waiting_end_date)
+    await message.answer(
+        "Введите <b>дату окончания</b> периода в формате <b>YYYY-MM-DD</b>\n"
+        "Например: <code>2025-01-31</code>",
+        reply_markup=cancel_kb(),
+    )
+
+
+@router.message(HistoricalReportStates.waiting_end_date, F.text)
+async def process_historical_end_date(
+    message: Message, state: FSMContext, session: AsyncSession
+) -> None:
+    """Приём даты окончания и запуск отчёта за период."""
+    end = _parse_yyyy_mm_dd(message.text)
+    if not end:
+        await message.answer(
+            "❌ Неверный формат. Введите дату в формате <b>YYYY-MM-DD</b>:"
+        )
+        return
+    data = await state.get_data()
+    start = data.get("start_date")
+    profile_id = data.get("profile_id")
+    if not start or not profile_id:
+        await message.answer("❌ Ошибка. Начните заново: /profiles → Исторический отчёт")
+        await state.clear()
+        return
+    if end < start:
+        await message.answer("❌ Дата окончания должна быть не раньше даты начала.")
+        return
+
+    profile = await get_profile_by_id(profile_id, message.from_user.id, session)
+    if not profile:
+        await message.answer("❌ Профиль не найден.")
+        await state.clear()
+        return
+
+    result = await session.execute(
+        select(ReportTask).where(ReportTask.profile_id == profile_id)
+    )
+    task = result.scalar_one_or_none()
+    chat_id = message.chat.id
+    if task and task.chat_id:
+        chat_id = task.chat_id
+
+    selected = None
+    if task and task.report_metrics:
+        try:
+            selected = json.loads(task.report_metrics)
+        except (TypeError, json.JSONDecodeError):
+            pass
+
+    await state.clear()
+    sent = await message.answer(f"📈 Формирую исторический отчёт за период {start} – {end}…")
+
+    if message.bot:
+        await run_report_to_chat(
+            message.bot,
+            profile,
+            chat_id,
+            selected_metrics=selected,
+            start_date=start,
+            end_date=end,
+        )
+    try:
+        await sent.edit_text("✅ Исторический отчёт отправлен выше.")
+    except Exception:
+        pass
