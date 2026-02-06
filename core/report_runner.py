@@ -16,9 +16,9 @@ from core.config import settings
 from core.database.models import AvitoProfile, ReportTask
 from core.database.session import get_session
 from core.timezone import (
-    moscow_now,
-    moscow_time_str,
+    date_range_formatted,
     moscow_date_range_yesterday,
+    moscow_time_str,
     moscow_yesterday_formatted,
 )
 from utils.analytics import AnalyticsMetrics
@@ -143,9 +143,18 @@ async def _notify_admin(bot: Bot, text: str) -> None:
         logger.warning("Failed to notify admin: %s", e)
 
 
-async def run_report(bot: Bot, task: ReportTask, profile: AvitoProfile) -> None:
+async def run_report(
+    bot: Bot,
+    task: ReportTask,
+    profile: AvitoProfile,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> None:
     """
-    Получить токен, вызвать fetch_all_metrics, отправить отчёт в task.chat_id.
+    Получить токен, вызвать fetch_all_metrics за период, отправить отчёт в task.chat_id.
+
+    Если заданы start_date и end_date (YYYY-MM-DD), формируется отчёт строго за этот
+    период (Historical Report). Иначе — за вчера по Москве.
     При ошибке обновления токена — уведомить админа.
     """
     chat_id = task.chat_id
@@ -189,8 +198,12 @@ async def run_report(bot: Bot, task: ReportTask, profile: AvitoProfile) -> None:
             pass
         return
 
-    date_from, date_to = moscow_date_range_yesterday()
-    period_str = moscow_yesterday_formatted()
+    if start_date and end_date:
+        date_from, date_to = start_date, end_date
+        period_str = date_range_formatted(date_from, date_to)
+    else:
+        date_from, date_to = moscow_date_range_yesterday()
+        period_str = moscow_yesterday_formatted()
 
     try:
         metrics = await fetch_all_metrics(token, user_id, date_from, date_to)
@@ -233,10 +246,14 @@ async def run_report_to_chat(
     profile: AvitoProfile,
     chat_id: int,
     selected_metrics: list[str] | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> None:
     """
-    Отправить отчёт за вчера в указанный чат (по запросу «Получить отчёт сейчас»).
-    Те же данные, что и по расписанию — за вчера по Москве.
+    Отправить отчёт в указанный чат (по запросу «Получить отчёт сейчас» или исторический).
+
+    Если заданы start_date и end_date (YYYY-MM-DD), данные запрашиваются строго за этот
+    период (Historical Report). Иначе — за вчера по Москве.
     """
     try:
         auth = AvitoAuth(profile)
@@ -274,8 +291,12 @@ async def run_report_to_chat(
             pass
         return
 
-    date_from, date_to = moscow_date_range_yesterday()
-    period_str = moscow_yesterday_formatted()
+    if start_date and end_date:
+        date_from, date_to = start_date, end_date
+        period_str = date_range_formatted(date_from, date_to)
+    else:
+        date_from, date_to = moscow_date_range_yesterday()
+        period_str = moscow_yesterday_formatted()
 
     try:
         metrics = await fetch_all_metrics(token, user_id, date_from, date_to)

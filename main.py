@@ -50,6 +50,7 @@ try:
     from bot.handlers.register import router as register_router
     from bot.handlers.profiles import router as profiles_router
     from bot.handlers.reports import router as reports_router
+    from bot.handlers.settings import router as settings_router
     from bot.middleware import DbSessionMiddleware
     from core.database.session import async_engine, init_db
     from core.scheduler import start_scheduler, stop_scheduler
@@ -62,6 +63,7 @@ BOT_COMMANDS = [
     BotCommand(command="start", description="Запуск и список команд"),
     BotCommand(command="add_profile", description="Добавить профиль Avito"),
     BotCommand(command="profiles", description="Управление профилями и отчётами"),
+    BotCommand(command="settings", description="Настройка времени и частоты отчётов"),
     BotCommand(command="stats", description="В группе: получить отчёт в этот чат"),
     BotCommand(command="cancel", description="Отменить текущее действие"),
 ]
@@ -144,6 +146,7 @@ async def _create_bot_and_dispatcher():
     dp.include_router(register_router)
     dp.include_router(profiles_router)
     dp.include_router(reports_router)
+    dp.include_router(settings_router)
     # Startup вызывается явно до start_polling; shutdown — при отмене задачи или при ошибке
     dp.shutdown.register(on_shutdown)
 

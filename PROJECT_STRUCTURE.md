@@ -56,3 +56,53 @@ This document describes the expected layout so that the app runs correctly (loca
 - Set **Root Directory** to the folder that contains `main.py`, `bot/`, `core/`, and `alembic/`.  
   If the repo is `prodjekt_parser_tg` and the bot lives in `avito_analytics_bot/`, set Root Directory to **`avito_analytics_bot`**.
 - The Dockerfile `COPY . .` expects the build context to be this same root (so build from that root).
+
+## Extended layout (schedule & messages)
+
+Дополнительные модули и изменения для расписания, периодов и сбора сообщений:
+
+```
+├── core/
+│   ├── database/
+│   │   └── models.py        <- Добавляем настройки расписания
+│   ├── avito/
+│   │   └── messenger.py     <- НОВЫЙ: Логика сбора сообщений
+│   ├── scheduler.py         <- Расширяем для динамических задач
+│   └── report_runner.py     <- Добавляем поддержку периодов
+├── bot/
+│   ├── handlers/
+│   │   └── settings.py      <- НОВЫЙ: Настройка времени и частоты
+│   ├── keyboards.py         <- Инлайновые меню для выбора дат/дней
+│   └── states.py            <- Состояния для ввода интервалов
+└── utils/
+    └── formatter.py         <- Логика формирования Excel
+```
+
+## Architecture flow (diagram)
+
+```mermaid
+flowchart TD
+    A[Container start] --> B[alembic upgrade head]
+    B --> C[main.py]
+    C --> D[Logging init]
+    D --> E[Create Bot & Dispatcher]
+    E --> F[Attach middleware (DB session)]
+    F --> G[Register handlers]
+    G --> H[on_startup: init_db + scheduler]
+    H --> I[Long polling: dp.start_polling]
+
+    I --> J{Incoming update?}
+    J -->|Yes| K[Handler (register/profiles/reports)]
+    K --> L[Business logic: Avito API / reports]
+    L --> M[Database (SQLAlchemy)]
+    M --> I
+
+    H --> N[Scheduler (APScheduler)]
+    N --> O[Check report tasks]
+    O --> P[Send reports to Telegram]
+    P --> I
+
+    I --> Q{SIGTERM/SIGINT}
+    Q -->|Yes| R[on_shutdown: stop_scheduler + dispose DB]
+    R --> S[Process exit]
+```

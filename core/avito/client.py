@@ -199,6 +199,55 @@ class AvitoClient:
         )
 
     # ═══════════════════════════════════════════════════════════════════════════
+    # Messenger (чаты и сообщения) — scope messenger
+    # Документация: https://developers.avito.ru/api-catalog/messenger/documentation
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    async def get_conversations(
+        self,
+        user_id: int,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """
+        GET /messenger/v1/accounts/{user_id}/chats/
+        Список активных чатов (диалогов).
+
+        :param user_id: Avito user_id (из /core/v1/accounts/self)
+        :param limit: макс. количество чатов (1..100)
+        :param offset: смещение для пагинации
+        :return: {"chats": [...], "total": N} — каждый чат: id, context, users, last_message, created, updated
+        """
+        return await self._request(
+            "GET",
+            f"/messenger/v1/accounts/{user_id}/chats/",
+            params={"limit": limit, "offset": offset},
+        )
+
+    async def get_messages(
+        self,
+        user_id: int,
+        chat_id: str | int,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """
+        GET /messenger/v1/accounts/{user_id}/chats/{chat_id}/messages/
+        История сообщений в чате.
+
+        :param user_id: Avito user_id
+        :param chat_id: ID чата (из get_conversations)
+        :param limit: макс. сообщений (1..100)
+        :param offset: смещение для пагинации
+        :return: {"messages": [...]} — каждое: id, author_id, created, content.text, type, direction
+        """
+        return await self._request(
+            "GET",
+            f"/messenger/v1/accounts/{user_id}/chats/{chat_id}/messages/",
+            params={"limit": limit, "offset": offset},
+        )
+
+    # ═══════════════════════════════════════════════════════════════════════════
     # Баланс (кошелёк, аванс) — scope user_balance:read
     # ═══════════════════════════════════════════════════════════════════════════
 

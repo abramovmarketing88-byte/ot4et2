@@ -148,3 +148,55 @@ def cancel_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel"))
     return builder.as_markup()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Выбор дат / дней (для настроек расписания и периодов)
+# ═══════════════════════════════════════════════════════════════════════════
+
+WEEKDAY_LABELS = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+
+
+def report_days_kb(profile_id: int, selected_days: set[int]) -> InlineKeyboardMarkup:
+    """
+    Инлайновое меню выбора дней недели (0=Пн .. 6=Вс).
+    selected_days: множество 0..6; пустое = все дни.
+    """
+    builder = InlineKeyboardBuilder()
+    all_selected = len(selected_days) == 0
+    for day in range(7):
+        on = all_selected or day in selected_days
+        prefix = "✅" if on else "⬜"
+        builder.row(
+            InlineKeyboardButton(
+                text=f"{prefix} {WEEKDAY_LABELS[day]}",
+                callback_data=f"report_day_toggle:{profile_id}:{day}",
+            )
+        )
+    builder.row(
+        InlineKeyboardButton(
+            text="« Назад",
+            callback_data=f"profile_report:{profile_id}",
+        )
+    )
+    return builder.as_markup()
+
+
+def report_period_kb(profile_id: int, current: str = "day") -> InlineKeyboardMarkup:
+    """Выбор периода отчёта: день / неделя / месяц."""
+    builder = InlineKeyboardBuilder()
+    for period, label in (("day", "День"), ("week", "Неделя"), ("month", "Месяц")):
+        prefix = "✅" if period == current else "⬜"
+        builder.row(
+            InlineKeyboardButton(
+                text=f"{prefix} {label}",
+                callback_data=f"report_period:{profile_id}:{period}",
+            )
+        )
+    builder.row(
+        InlineKeyboardButton(
+            text="« Назад",
+            callback_data=f"profile_report:{profile_id}",
+        )
+    )
+    return builder.as_markup()

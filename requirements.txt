@@ -15,6 +15,10 @@ apscheduler>=3.10.0
 # Avito API / HTTP
 httpx>=0.25.0
 
+# Excel export (chats)
+pandas>=2.0.0
+openpyxl>=3.1.0
+
 # Config
 pydantic-settings>=2.0.0
 python-dotenv>=1.0.0

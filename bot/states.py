@@ -20,3 +20,11 @@ class ConfigureReportStates(StatesGroup):
 class DeleteProfileStates(StatesGroup):
     """Удаление профиля."""
     confirm_delete = State()
+
+
+class SettingsStates(StatesGroup):
+    """Настройка времени, частоты и периода отчёта."""
+    choosing_time = State()
+    choosing_days = State()
+    choosing_period = State()
+    waiting_interval = State()

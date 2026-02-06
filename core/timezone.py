@@ -38,3 +38,16 @@ def moscow_date_range_yesterday() -> tuple[str, str]:
 def moscow_yesterday_formatted() -> str:
     """Вчера по Москве в формате DD.MM.YYYY для отчёта."""
     return (moscow_now().date() - timedelta(days=1)).strftime("%d.%m.%Y")
+
+
+def date_range_formatted(date_from: str, date_to: str) -> str:
+    """Форматирование диапазона дат для заголовка отчёта (YYYY-MM-DD -> DD.MM.YYYY)."""
+    from datetime import date
+    try:
+        d1 = date.fromisoformat(date_from)
+        d2 = date.fromisoformat(date_to)
+        if d1 == d2:
+            return d1.strftime("%d.%m.%Y")
+        return f"{d1.strftime('%d.%m.%Y')} – {d2.strftime('%d.%m.%Y')}"
+    except (ValueError, TypeError):
+        return f"{date_from} – {date_to}"
