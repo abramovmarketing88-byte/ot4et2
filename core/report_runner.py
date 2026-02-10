@@ -22,7 +22,7 @@ from core.timezone import (
     moscow_yesterday_formatted,
 )
 from utils.analytics import AnalyticsMetrics
-from utils.formatter import format_report_md2, format_error_md2
+from utils.formatter import escape_md, format_report_md2, format_error_md2
 
 logger = logging.getLogger(__name__)
 
@@ -326,6 +326,98 @@ async def run_report_to_chat(
         logger.exception("Failed to send report to chat_id=%s", chat_id)
         try:
             await bot.send_message(chat_id, f"Ошибка отправки отчёта: {e!s}")
+        except Exception:
+            pass
+
+
+def _sum_optional(*values: float | None) -> float | None:
+    """Суммировать optional-значения (None игнорируется)."""
+    non_null = [v for v in values if v is not None]
+    if not non_null:
+        return None
+    return round(sum(non_null), 2)
+
+
+def _aggregate_metrics(metrics_list: list[AnalyticsMetrics]) -> AnalyticsMetrics:
+    """Сложить метрики нескольких аккаунтов в одну сводку."""
+    total = AnalyticsMetrics()
+    for metrics in metrics_list:
+        total.views += metrics.views
+        total.uniq_views += metrics.uniq_views
+        total.contacts += metrics.contacts
+        total.uniq_contacts += metrics.uniq_contacts
+        total.favorites += metrics.favorites
+        total.uniq_favorites += metrics.uniq_favorites
+        total.total_spending += metrics.total_spending
+        total.presence_spending += metrics.presence_spending
+        total.promo_spending += metrics.promo_spending
+        total.rest_spending += metrics.rest_spending
+        total.active_items += metrics.active_items
+        total.wallet_balance = _sum_optional(total.wallet_balance, metrics.wallet_balance)
+        total.advance_balance = _sum_optional(total.advance_balance, metrics.advance_balance)
+    return total
+
+
+async def run_combined_report_to_chat(
+    bot: Bot,
+    profiles: list[AvitoProfile],
+    chat_id: int,
+    selected_metrics: list[str] | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> None:
+    """Сформировать один общий отчёт по нескольким Avito-профилям."""
+    if not profiles:
+        return
+
+    if start_date and end_date:
+        date_from, date_to = start_date, end_date
+        period_str = date_range_formatted(date_from, date_to)
+    else:
+        date_from, date_to = moscow_date_range_yesterday()
+        period_str = moscow_yesterday_formatted()
+
+    collected: list[AnalyticsMetrics] = []
+    failed_profiles: list[str] = []
+    included_names: list[str] = []
+
+    for profile in profiles:
+        try:
+            auth = AvitoAuth(profile)
+            token = await auth.ensure_token()
+            if not profile.user_id:
+                raise ValueError("Avito user_id не получен. Выполните настройку профиля.")
+            metrics = await fetch_all_metrics(token, profile.user_id, date_from, date_to)
+            collected.append(metrics)
+            included_names.append(profile.profile_name)
+        except Exception as e:
+            logger.exception("Failed to collect profile metrics for profile id=%s", profile.id)
+            failed_profiles.append(f"{profile.profile_name}: {e!s}")
+
+    if not collected:
+        if failed_profiles:
+            await bot.send_message(
+                chat_id,
+                "⚠️ Не удалось сформировать сводный отчёт по выбранным аккаунтам:\n\n"
+                + "\n".join(failed_profiles),
+            )
+        return
+
+    merged = _aggregate_metrics(collected)
+    report_name = f"Сводный отчёт ({len(included_names)} аккаунтов)"
+    text = format_report_md2(report_name, period_str, merged, selected_metrics=selected_metrics)
+    if failed_profiles:
+        failed_lines = "\n".join(f"• {escape_md(item)}" for item in failed_profiles)
+        warning = "\n\n⚠️ *Не вошли в сводку:*\n" + failed_lines
+        text += warning
+
+    try:
+        await bot.send_message(chat_id, text, parse_mode=ParseMode.MARKDOWN_V2)
+        logger.info("Combined report sent to chat_id=%s for %s profile(s)", chat_id, len(included_names))
+    except Exception as e:
+        logger.exception("Failed to send combined report to chat_id=%s", chat_id)
+        try:
+            await bot.send_message(chat_id, f"Ошибка отправки сводного отчёта: {e!s}")
         except Exception:
             pass
 
