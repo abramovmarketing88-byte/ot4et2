@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards import report_settings_kb, report_characteristics_kb, set_chat_kb, cancel_kb
 from bot.states import ConfigureReportStates, HistoricalReportStates
 from core.database.models import AvitoProfile, ReportTask
-from core.report_runner import run_report_to_chat
+from core.report_runner import run_combined_report_to_chat, run_report_to_chat
 from core.scheduler import sync_scheduler_tasks
 
 logger = logging.getLogger(__name__)
@@ -121,19 +121,25 @@ async def cmd_stats(message: Message, session: AsyncSession) -> None:
 
     sent = await message.answer("📈 Формирую отчёт за вчера…")
 
+    profiles = [task.profile for task in tasks if task.profile]
     selected_metrics = None
+    # Для сводного отчёта берём набор характеристик из первой задачи,
+    # где характеристики явно заданы.
     for task in tasks:
-        if not task.profile:
-            continue
         if task.report_metrics:
             try:
                 selected_metrics = json.loads(task.report_metrics)
+                break
             except (TypeError, json.JSONDecodeError):
                 selected_metrics = None
-        if message.bot:
-            await run_report_to_chat(
-                message.bot, task.profile, chat_id, selected_metrics=selected_metrics
-            )
+
+    if message.bot:
+        await run_combined_report_to_chat(
+            message.bot,
+            profiles,
+            chat_id,
+            selected_metrics=selected_metrics,
+        )
 
     try:
         await sent.edit_text("✅ Отчёт отправлен выше.")
