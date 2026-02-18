@@ -291,8 +291,11 @@ async def process_followups() -> None:
     if not bot:
         return
 
+    now = datetime.utcnow()
+    items_data: list[dict[str, object]] = []
+
+    # Lock and mark rows quickly, then commit before network calls.
     async with get_session() as session:
-        now = datetime.utcnow()
         stmt = (
             select(ScheduledFollowup)
             .where(ScheduledFollowup.status == "pending")
@@ -306,84 +309,151 @@ async def process_followups() -> None:
 
         result = await session.execute(stmt)
         items = list(result.scalars().all())
+        if not items:
+            return
 
         for item in items:
-            try:
-                step_res = await session.execute(
-                    select(FollowupStep).where(FollowupStep.id == item.step_id)
+            item.status = "processing"
+
+        step_ids = [item.step_id for item in items]
+        branch_ids = [item.branch_id for item in items]
+
+        step_res = await session.execute(select(FollowupStep).where(FollowupStep.id.in_(step_ids)))
+        step_map = {step.id: step for step in step_res.scalars().all()}
+
+        branch_res = await session.execute(select(AIBranch).where(AIBranch.id.in_(branch_ids)))
+        branch_map = {branch.id: branch for branch in branch_res.scalars().all()}
+
+        prompt_ids = [
+            step.prompt_template_id
+            for step in step_map.values()
+            if step.prompt_template_id is not None
+        ]
+        prompt_map: dict[int, PromptTemplate] = {}
+        if prompt_ids:
+            prompt_res = await session.execute(
+                select(PromptTemplate).where(PromptTemplate.id.in_(prompt_ids))
+            )
+            prompt_map = {prompt.id: prompt for prompt in prompt_res.scalars().all()}
+
+        for item in items:
+            state_res = await session.execute(
+                select(AIDialogState).where(
+                    AIDialogState.user_id == item.user_id,
+                    AIDialogState.branch_id == item.branch_id,
+                    AIDialogState.dialog_id == item.dialog_id,
                 )
-                step = step_res.scalar_one_or_none()
-                if not step:
-                    item.status = "failed"
-                    continue
+            )
+            dialog_state = state_res.scalar_one_or_none()
+            step = step_map.get(item.step_id)
+            branch = branch_map.get(item.branch_id)
+            prompt_tmpl = None
+            if step and step.prompt_template_id is not None:
+                prompt_tmpl = prompt_map.get(step.prompt_template_id)
+            items_data.append(
+                {
+                    "id": item.id,
+                    "user_id": item.user_id,
+                    "branch_id": item.branch_id,
+                    "chain_id": item.chain_id,
+                    "step_id": item.step_id,
+                    "dialog_id": item.dialog_id,
+                    "converted": dialog_state.is_converted if dialog_state else item.converted,
+                    "negative": dialog_state.has_negative if dialog_state else item.negative_detected,
+                    "step": step,
+                    "branch": branch,
+                    "prompt_template": prompt_tmpl,
+                }
+            )
 
-                state_res = await session.execute(
-                    select(AIDialogState).where(
-                        AIDialogState.user_id == item.user_id,
-                        AIDialogState.branch_id == item.branch_id,
-                        AIDialogState.dialog_id == item.dialog_id,
-                    )
+    llm = LLMClient()
+    updates: list[tuple[int, str]] = []
+    assistant_messages: list[dict[str, object]] = []
+
+    for item in items_data:
+        item_id = int(item["id"])
+        try:
+            step = item["step"]
+            if step is None:
+                updates.append((item_id, "failed"))
+                continue
+
+            converted = bool(item["converted"])
+            negative = bool(item["negative"])
+
+            if step.send_mode == "if_not_converted" and converted:
+                updates.append((item_id, "canceled"))
+                continue
+            if step.send_mode == "if_not_converted_and_no_negative" and (converted or negative):
+                updates.append((item_id, "canceled"))
+                continue
+
+            text = ""
+            if step.content_type == "fixed":
+                text = step.fixed_text or ""
+            else:
+                branch = item["branch"]
+                if branch is None:
+                    updates.append((item_id, "failed"))
+                    continue
+                text = await llm.generate_followup(
+                    branch=branch,
+                    prompt_template=item["prompt_template"],
+                    context_data={
+                        "user_id": item["user_id"],
+                        "branch_id": item["branch_id"],
+                        "chain_id": item["chain_id"],
+                        "step_id": item["step_id"],
+                        "dialog_id": item["dialog_id"],
+                    },
                 )
-                dialog_state = state_res.scalar_one_or_none()
-                converted = dialog_state.is_converted if dialog_state else item.converted
-                negative = dialog_state.has_negative if dialog_state else item.negative_detected
 
-                if step.send_mode == "if_not_converted" and converted:
-                    item.status = "canceled"
-                    continue
-                if step.send_mode == "if_not_converted_and_no_negative" and (converted or negative):
-                    item.status = "canceled"
-                    continue
+            if step.target_channel == "telegram_user":
+                await bot.send_message(chat_id=int(item["user_id"]), text=text)
+            elif step.target_channel == "telegram_manager" and settings.ADMIN_CHAT_ID:
+                await bot.send_message(chat_id=settings.ADMIN_CHAT_ID, text=text)
+            elif step.target_channel == "avito_dialog":
+                logger.info("avito_dialog target selected for followup id=%s", item_id)
 
-                text = ""
-                if step.content_type == "fixed":
-                    text = step.fixed_text or ""
-                else:
-                    branch_res = await session.execute(select(AIBranch).where(AIBranch.id == item.branch_id))
-                    branch = branch_res.scalar_one_or_none()
-                    if not branch:
-                        item.status = "failed"
-                        continue
-                    prompt_tmpl = None
-                    if step.prompt_template_id is not None:
-                        pt_res = await session.execute(
-                            select(PromptTemplate).where(PromptTemplate.id == step.prompt_template_id)
-                        )
-                        prompt_tmpl = pt_res.scalar_one_or_none()
-                    llm = LLMClient()
-                    text = await llm.generate_followup(
-                        branch=branch,
-                        prompt_template=prompt_tmpl,
-                        context_data={
-                            "user_id": item.user_id,
-                            "branch_id": item.branch_id,
-                            "chain_id": item.chain_id,
-                            "step_id": item.step_id,
-                            "dialog_id": item.dialog_id,
-                        },
-                    )
+            assistant_messages.append(
+                {
+                    "user_id": int(item["user_id"]),
+                    "branch_id": int(item["branch_id"]),
+                    "dialog_id": str(item["dialog_id"]),
+                    "content": text,
+                }
+            )
+            updates.append((item_id, "sent"))
+        except Exception:
+            logger.exception("process_followups failed for id=%s", item_id)
+            updates.append((item_id, "failed"))
 
-                if step.target_channel == "telegram_user":
-                    await bot.send_message(chat_id=item.user_id, text=text)
-                elif step.target_channel == "telegram_manager" and settings.ADMIN_CHAT_ID:
-                    await bot.send_message(chat_id=settings.ADMIN_CHAT_ID, text=text)
-                elif step.target_channel == "avito_dialog":
-                    logger.info("avito_dialog target selected for followup id=%s", item.id)
+    if not updates and not assistant_messages:
+        return
 
-                session.add(
-                    AIDialogMessage(
-                        user_id=item.user_id,
-                        branch_id=item.branch_id,
-                        dialog_id=item.dialog_id,
-                        role="assistant",
-                        content=text,
-                        created_at=datetime.utcnow(),
-                    )
+    # Final short transaction for status updates and assistant persistence.
+    async with get_session() as session:
+        update_ids = [item_id for item_id, _ in updates]
+        rows_res = await session.execute(
+            select(ScheduledFollowup).where(ScheduledFollowup.id.in_(update_ids))
+        )
+        rows_map = {row.id: row for row in rows_res.scalars().all()}
+        for item_id, status in updates:
+            row = rows_map.get(item_id)
+            if row:
+                row.status = status
+
+        for msg in assistant_messages:
+            session.add(
+                AIDialogMessage(
+                    user_id=msg["user_id"],
+                    branch_id=msg["branch_id"],
+                    dialog_id=msg["dialog_id"],
+                    role="assistant",
+                    content=msg["content"],
+                    created_at=datetime.utcnow(),
                 )
-                item.status = "sent"
-            except Exception:
-                logger.exception("process_followups failed for id=%s", item.id)
-                item.status = "failed"
+            )
 
 
 async def stop_scheduler() -> None:

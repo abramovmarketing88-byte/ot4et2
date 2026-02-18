@@ -2,6 +2,7 @@
 import logging
 import re
 from datetime import datetime, timedelta
+from typing import Any
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -12,7 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards import ai_branches_kb, mode_select_kb
 from bot.states import AiSellerStates
-from core.database.models import AIBranch, AIDialogMessage, AIDialogState, PromptTemplate, User
+from core.database.models import (
+    AIBranch,
+    AIDialogMessage,
+    AIDialogState,
+    FollowupChain,
+    FollowupStep,
+    PromptTemplate,
+    ScheduledFollowup,
+    User,
+)
 from core.llm.client import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -187,6 +197,9 @@ async def ai_chat_message(message: Message, session: AsyncSession) -> None:
     if _detect_negative(text):
         dialog_state.has_negative = True
 
+    # Persist user message + dialog state before network calls.
+    await session.commit()
+
     # 3) Build context (retention_days, max_messages)
     context_query = select(AIDialogMessage).where(
         AIDialogMessage.user_id == user_id,
@@ -211,6 +224,9 @@ async def ai_chat_message(message: Message, session: AsyncSession) -> None:
     prompt_template = prompt_res.scalar_one_or_none()
     system_prompt = prompt_template.content if prompt_template else ""
 
+    # Keep LLM call outside active DB transaction.
+    await session.commit()
+
     # 5) LLM
     llm_client = LLMClient()
     messages: list[dict[str, Any]] = []
@@ -230,5 +246,38 @@ async def ai_chat_message(message: Message, session: AsyncSession) -> None:
             created_at=datetime.utcnow(),
         )
     )
+
+    if branch.followup_enabled:
+        chains_res = await session.execute(
+            select(FollowupChain).where(
+                FollowupChain.branch_id == branch.id,
+                FollowupChain.is_active == True,
+                FollowupChain.start_event == "dialog_started",
+            )
+        )
+        chains = list(chains_res.scalars().all())
+        if chains:
+            chain_ids = [c.id for c in chains]
+            steps_res = await session.execute(
+                select(FollowupStep)
+                .where(FollowupStep.chain_id.in_(chain_ids))
+                .order_by(FollowupStep.chain_id.asc(), FollowupStep.order_index.asc())
+            )
+            for step in steps_res.scalars().all():
+                session.add(
+                    ScheduledFollowup(
+                        user_id=user_id,
+                        branch_id=branch.id,
+                        chain_id=step.chain_id,
+                        step_id=step.id,
+                        dialog_id=dialog_id,
+                        execute_at=datetime.utcnow() + timedelta(seconds=step.delay_seconds),
+                        status="pending",
+                        converted=dialog_state.is_converted,
+                        negative_detected=dialog_state.has_negative,
+                    )
+                )
+
+    await session.commit()
 
     await message.answer(answer)
