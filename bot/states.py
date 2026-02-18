@@ -35,3 +35,25 @@ class HistoricalReportStates(StatesGroup):
     """Исторический отчёт: ввод периода."""
     waiting_start_date = State()
     waiting_end_date = State()
+
+
+class AiSellerStates(StatesGroup):
+    choosing_branch = State()
+    chatting = State()
+
+
+class PromptAdminStates(StatesGroup):
+    waiting_name = State()
+    waiting_scope = State()
+    waiting_content = State()
+
+
+class BranchAdminStates(StatesGroup):
+    waiting_name = State()
+    waiting_avito_profile_id = State()
+    waiting_gpt_model = State()
+    waiting_system_prompt_id = State()
+
+
+class FollowupAdminStates(StatesGroup):
+    waiting_chain_name = State()

@@ -21,7 +21,9 @@ from zoneinfo import ZoneInfo
 
 from core.config import settings
 from core.database.models import AvitoProfile, ReportTask
+from core.database.models import AIBranch, AIDialogMessage, AIDialogState, FollowupStep, ScheduledFollowup
 from core.database.session import get_session
+from core.llm.client import LLMClient
 from core.report_runner import run_report, set_report_bot
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,7 @@ logger = logging.getLogger(__name__)
 TIMEZONE = "Europe/Moscow"
 REPORT_JOB_ID_PREFIX = "report_task_"
 SYNC_JOB_ID = "report_sync_tasks"
+AI_FOLLOWUP_JOB_ID = "ai_followup_processor"
 
 # Sync URL for SQLAlchemyJobStore: replace '+asyncpg' with '' -> standard postgresql://
 _url = settings.DATABASE_URL
@@ -263,6 +266,100 @@ async def start_scheduler(bot: Bot) -> None:
         id=SYNC_JOB_ID,
         replace_existing=True,
     )
+    s.add_job(
+        process_followups,
+        "interval",
+        seconds=45,
+        id=AI_FOLLOWUP_JOB_ID,
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+
+async def process_followups() -> None:
+    from core.report_runner import _current_bot
+
+    bot = _current_bot
+    if not bot:
+        return
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(ScheduledFollowup)
+            .where(ScheduledFollowup.status == "pending")
+            .where(ScheduledFollowup.execute_at <= datetime.utcnow())
+            .order_by(ScheduledFollowup.execute_at.asc())
+            .limit(100)
+        )
+        items = list(result.scalars().all())
+
+        for item in items:
+            try:
+                step_res = await session.execute(
+                    select(FollowupStep).where(FollowupStep.id == item.step_id)
+                )
+                step = step_res.scalar_one_or_none()
+                if not step:
+                    item.status = "failed"
+                    continue
+
+                state_res = await session.execute(
+                    select(AIDialogState).where(
+                        AIDialogState.user_id == item.user_id,
+                        AIDialogState.branch_id == item.branch_id,
+                        AIDialogState.dialog_id == item.dialog_id,
+                    )
+                )
+                dialog_state = state_res.scalar_one_or_none()
+                converted = dialog_state.is_converted if dialog_state else item.converted
+                negative = dialog_state.has_negative if dialog_state else item.negative_detected
+
+                if step.send_mode == "if_not_converted" and converted:
+                    item.status = "canceled"
+                    continue
+                if step.send_mode == "if_not_converted_and_no_negative" and (converted or negative):
+                    item.status = "canceled"
+                    continue
+
+                text = ""
+                if step.content_type == "fixed":
+                    text = step.fixed_text or ""
+                else:
+                    branch_res = await session.execute(select(AIBranch).where(AIBranch.id == item.branch_id))
+                    branch = branch_res.scalar_one_or_none()
+                    if not branch:
+                        item.status = "failed"
+                        continue
+                    llm = LLMClient()
+                    text = await llm.generate_followup(
+                        gpt_model=branch.gpt_model,
+                        system_prompt="",
+                        dialog_context=[],
+                        followup_instruction="followup",
+                    )
+
+                if step.target_channel == "telegram_user":
+                    await bot.send_message(chat_id=item.user_id, text=text)
+                elif step.target_channel == "telegram_manager" and settings.ADMIN_CHAT_ID:
+                    await bot.send_message(chat_id=settings.ADMIN_CHAT_ID, text=text)
+                elif step.target_channel == "avito_dialog":
+                    logger.info("avito_dialog target selected for followup id=%s", item.id)
+
+                session.add(
+                    AIDialogMessage(
+                        user_id=item.user_id,
+                        branch_id=item.branch_id,
+                        dialog_id=item.dialog_id,
+                        role="assistant",
+                        content=text,
+                        created_at=datetime.utcnow(),
+                    )
+                )
+                item.status = "sent"
+            except Exception:
+                logger.exception("process_followups failed for id=%s", item.id)
+                item.status = "failed"
 
 
 async def stop_scheduler() -> None:
