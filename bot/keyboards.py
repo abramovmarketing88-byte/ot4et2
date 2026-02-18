@@ -248,12 +248,12 @@ def report_period_kb(profile_id: int, current: str = "day") -> InlineKeyboardMar
     return builder.as_markup()
 
 
-def mode_select_kb(current_mode: str = "reporting") -> InlineKeyboardMarkup:
+def mode_select_kb(current_mode: str = "reports") -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     ai_prefix = "✅" if current_mode == "ai_seller" else "⬜"
-    rep_prefix = "✅" if current_mode == "reporting" else "⬜"
+    rep_prefix = "✅" if current_mode == "reports" else "⬜"
     builder.row(InlineKeyboardButton(text=f"{ai_prefix} ИИ-продавец", callback_data="ai_mode:set:ai_seller"))
-    builder.row(InlineKeyboardButton(text=f"{rep_prefix} Отчётность", callback_data="ai_mode:set:reporting"))
+    builder.row(InlineKeyboardButton(text=f"{rep_prefix} Отчётность", callback_data="ai_mode:set:reports"))
     return builder.as_markup()
 
 

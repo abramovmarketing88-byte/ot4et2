@@ -10,6 +10,7 @@ from aiogram.types import Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.keyboards import mode_select_kb
 from core.database.models import User
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ async def cmd_start(
     logger.info("Команда /start: user_id=%s", message.from_user.id if message.from_user else None)
     await state.clear()
     telegram_id = message.from_user.id if message.from_user else 0
-    await get_or_create_user(telegram_id, session)
+    user = await get_or_create_user(telegram_id, session)
     await message.answer(
         "👋 <b>Добро пожаловать в Avito Analytics Bot!</b>\n\n"
         "Этот бот поможет вам получать статистику по объявлениям Avito.\n\n"
@@ -47,5 +48,6 @@ async def cmd_start(
         "/add_profile — добавить профиль Avito\n"
         "/profiles — управление профилями\n"
         "/stats — в группе/канале: получить отчёт в этот чат (сначала настройте чат здесь)\n"
-        "/cancel — отменить текущее действие"
+        "/cancel — отменить текущее действие",
+        reply_markup=mode_select_kb(user.current_mode),
     )

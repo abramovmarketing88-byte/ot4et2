@@ -18,7 +18,7 @@ class User(Base):
     __tablename__ = "users"
 
     telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    current_mode: Mapped[str] = mapped_column(String(20), default="reporting")
+    current_mode: Mapped[str] = mapped_column(String(20), default="reports")
     current_branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     profiles: Mapped[list["AvitoProfile"]] = relationship(

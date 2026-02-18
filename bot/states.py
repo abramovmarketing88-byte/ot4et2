@@ -46,6 +46,8 @@ class PromptAdminStates(StatesGroup):
     waiting_name = State()
     waiting_scope = State()
     waiting_content = State()
+    editing_prompt = State()
+    confirming_delete = State()
 
 
 class BranchAdminStates(StatesGroup):
@@ -53,7 +55,23 @@ class BranchAdminStates(StatesGroup):
     waiting_avito_profile_id = State()
     waiting_gpt_model = State()
     waiting_system_prompt_id = State()
+    waiting_context_retention_days = State()
+    waiting_max_messages_in_context = State()
+    waiting_followup_enabled = State()
 
 
 class FollowupAdminStates(StatesGroup):
-    waiting_chain_name = State()
+    # Chain
+    waiting_branch_id = State()
+    waiting_name = State()
+    waiting_start_event = State()
+    waiting_stop_on_conversion = State()
+    waiting_is_active = State()
+    # Step
+    waiting_order_index = State()
+    waiting_delay_seconds = State()
+    waiting_send_mode = State()
+    waiting_content_type = State()
+    waiting_fixed_text = State()
+    waiting_prompt_template_id = State()
+    waiting_target_channel = State()

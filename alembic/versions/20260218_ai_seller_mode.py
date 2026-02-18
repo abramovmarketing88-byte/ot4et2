@@ -17,7 +17,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("users", sa.Column("current_mode", sa.String(length=20), nullable=False, server_default="reporting"))
+    op.add_column("users", sa.Column("current_mode", sa.String(length=20), nullable=False, server_default="reports"))
     op.add_column("users", sa.Column("current_branch_id", sa.Integer(), nullable=True))
 
     op.create_table(
@@ -106,7 +106,8 @@ def upgrade() -> None:
     op.create_index(
         "ix_ai_dialog_messages_user_branch_created",
         "ai_dialog_messages",
-        ["user_id", "branch_id", sa.text("created_at DESC")],
+        ["user_id", "branch_id", "created_at"],
+        postgresql_ops={"created_at": "DESC"},
     )
     op.create_index(
         "ix_scheduled_followups_status_execute_at",

@@ -21,7 +21,14 @@ from zoneinfo import ZoneInfo
 
 from core.config import settings
 from core.database.models import AvitoProfile, ReportTask
-from core.database.models import AIBranch, AIDialogMessage, AIDialogState, FollowupStep, ScheduledFollowup
+from core.database.models import (
+    AIBranch,
+    AIDialogMessage,
+    AIDialogState,
+    FollowupStep,
+    PromptTemplate,
+    ScheduledFollowup,
+)
 from core.database.session import get_session
 from core.llm.client import LLMClient
 from core.report_runner import run_report, set_report_bot
@@ -285,13 +292,19 @@ async def process_followups() -> None:
         return
 
     async with get_session() as session:
-        result = await session.execute(
+        now = datetime.utcnow()
+        stmt = (
             select(ScheduledFollowup)
             .where(ScheduledFollowup.status == "pending")
-            .where(ScheduledFollowup.execute_at <= datetime.utcnow())
+            .where(ScheduledFollowup.execute_at <= now)
             .order_by(ScheduledFollowup.execute_at.asc())
             .limit(100)
         )
+        # Use row locking to avoid double-processing on PostgreSQL
+        if settings.DATABASE_URL.startswith("postgresql"):
+            stmt = stmt.with_for_update(skip_locked=True)
+
+        result = await session.execute(stmt)
         items = list(result.scalars().all())
 
         for item in items:
@@ -331,12 +344,23 @@ async def process_followups() -> None:
                     if not branch:
                         item.status = "failed"
                         continue
+                    prompt_tmpl = None
+                    if step.prompt_template_id is not None:
+                        pt_res = await session.execute(
+                            select(PromptTemplate).where(PromptTemplate.id == step.prompt_template_id)
+                        )
+                        prompt_tmpl = pt_res.scalar_one_or_none()
                     llm = LLMClient()
                     text = await llm.generate_followup(
-                        gpt_model=branch.gpt_model,
-                        system_prompt="",
-                        dialog_context=[],
-                        followup_instruction="followup",
+                        branch=branch,
+                        prompt_template=prompt_tmpl,
+                        context_data={
+                            "user_id": item.user_id,
+                            "branch_id": item.branch_id,
+                            "chain_id": item.chain_id,
+                            "step_id": item.step_id,
+                            "dialog_id": item.dialog_id,
+                        },
                     )
 
                 if step.target_channel == "telegram_user":
