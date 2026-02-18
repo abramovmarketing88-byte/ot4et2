@@ -1,16 +1,14 @@
-"""
-Handler для команды /start.
-"""
+"""Handler для команды /start."""
 import logging
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards import mode_select_kb
+from bot.keyboards import mode_select_kb, start_main_menu_kb
 from core.database.models import User
 
 logger = logging.getLogger(__name__)
@@ -18,10 +16,7 @@ router = Router(name="register")
 
 
 async def get_or_create_user(telegram_id: int, session: AsyncSession) -> User:
-    """Получить или создать пользователя по telegram_id (использует сессию из middleware)."""
-    result = await session.execute(
-        select(User).where(User.telegram_id == telegram_id)
-    )
+    result = await session.execute(select(User).where(User.telegram_id == telegram_id))
     user = result.scalar_one_or_none()
     if user:
         return user
@@ -33,21 +28,44 @@ async def get_or_create_user(telegram_id: int, session: AsyncSession) -> User:
 
 
 @router.message(CommandStart())
-async def cmd_start(
-    message: Message, session: AsyncSession, state: FSMContext
-) -> None:
-    """Приветствие и регистрация пользователя. Всегда сбрасывает FSM (выход из сценариев)."""
-    logger.info("Команда /start: user_id=%s", message.from_user.id if message.from_user else None)
+async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) -> None:
     await state.clear()
     telegram_id = message.from_user.id if message.from_user else 0
-    user = await get_or_create_user(telegram_id, session)
+    await get_or_create_user(telegram_id, session)
     await message.answer(
-        "👋 <b>Добро пожаловать в Avito Analytics Bot!</b>\n\n"
-        "Этот бот поможет вам получать статистику по объявлениям Avito.\n\n"
-        "<b>Команды:</b>\n"
-        "/add_profile — добавить профиль Avito\n"
-        "/profiles — управление профилями\n"
-        "/stats — в группе/канале: получить отчёт в этот чат (сначала настройте чат здесь)\n"
-        "/cancel — отменить текущее действие",
-        reply_markup=mode_select_kb(user.current_mode),
+        "👋 <b>Добро пожаловать в Avito Analytics Bot!</b>\n\nВыберите раздел:",
+        reply_markup=start_main_menu_kb(),
     )
+
+
+@router.callback_query(F.data == "main:help")
+async def cb_main_help(callback: CallbackQuery) -> None:
+    await callback.message.edit_text(
+        "Команды:\n/start\n/profiles\n/stats\n/mode",
+        reply_markup=start_main_menu_kb(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "main:reports")
+async def cb_main_reports(callback: CallbackQuery) -> None:
+    await callback.message.edit_text("Откройте /profiles и выберите Report Settings", reply_markup=start_main_menu_kb())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "main:ai")
+async def cb_main_ai(callback: CallbackQuery) -> None:
+    await callback.message.edit_text("Откройте /mode для AI Seller режима.", reply_markup=mode_select_kb("ai_seller"))
+    await callback.answer()
+
+
+@router.callback_query(F.data == "main:profiles")
+async def cb_main_profiles(callback: CallbackQuery) -> None:
+    await callback.message.edit_text("Откройте /profiles для управления профилями.", reply_markup=start_main_menu_kb())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "main:templates")
+async def cb_main_templates(callback: CallbackQuery) -> None:
+    await callback.message.edit_text("Global AI Templates: используйте /prompts", reply_markup=start_main_menu_kb())
+    await callback.answer()

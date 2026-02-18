@@ -16,12 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards import (
     profiles_list_kb,
     profile_actions_kb,
+    profile_hub_kb,
+    ai_settings_kb,
     confirm_delete_kb,
     cancel_kb,
 )
 from bot.states import AddProfileStates, DeleteProfileStates
 from core.avito.auth import AvitoAuth
-from core.database.models import User, AvitoProfile
+from core.database.models import User, AvitoProfile, AISettings, ScheduledFollowup
 
 logger = logging.getLogger(__name__)
 router = Router(name="profiles")
@@ -107,7 +109,7 @@ async def cb_profile_view(callback: CallbackQuery, session: AsyncSession) -> Non
         return
     await callback.message.edit_text(
         format_profile_info(profile),
-        reply_markup=profile_actions_kb(profile_id),
+        reply_markup=profile_hub_kb(profile_id),
     )
     await callback.answer()
 
@@ -371,3 +373,47 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
         return
     await state.clear()
     await message.answer("❌ Действие отменено.")
+
+
+@router.callback_query(F.data.startswith("profile_ai:"))
+async def cb_profile_ai(callback: CallbackQuery, session: AsyncSession) -> None:
+    profile_id = int(callback.data.split(":")[1])
+    profile = await get_profile_by_id(profile_id, callback.from_user.id, session)
+    if not profile:
+        await callback.answer("Профиль не найден", show_alert=True)
+        return
+    ai = await session.get(AISettings, profile_id)
+    if ai is None:
+        ai = AISettings(profile_id=profile_id)
+        session.add(ai)
+        await session.flush()
+    await callback.message.edit_text("🤖 AI Settings", reply_markup=ai_settings_kb(profile_id, ai.is_enabled))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("profile_ai_toggle:"))
+async def cb_profile_ai_toggle(callback: CallbackQuery, session: AsyncSession) -> None:
+    profile_id = int(callback.data.split(":")[1])
+    profile = await get_profile_by_id(profile_id, callback.from_user.id, session)
+    if not profile:
+        await callback.answer("Профиль не найден", show_alert=True)
+        return
+    ai = await session.get(AISettings, profile_id)
+    if ai is None:
+        ai = AISettings(profile_id=profile_id, is_enabled=True)
+        session.add(ai)
+    else:
+        ai.is_enabled = not ai.is_enabled
+    if not ai.is_enabled:
+        rows = await session.execute(select(ScheduledFollowup).where(ScheduledFollowup.profile_id == profile_id, ScheduledFollowup.status == "pending"))
+        for item in rows.scalars().all():
+            item.status = "canceled"
+    await callback.message.edit_text("🤖 AI Settings", reply_markup=ai_settings_kb(profile_id, ai.is_enabled))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("profile_ai_menu:"))
+async def cb_profile_ai_menu(callback: CallbackQuery) -> None:
+    _, profile_id, section = callback.data.split(":", 2)
+    await callback.answer()
+    await callback.message.answer(f"Раздел {section} для профиля #{profile_id} пока в текстовом режиме. Используйте /prompts для шаблонов.")

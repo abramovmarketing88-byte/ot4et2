@@ -277,3 +277,49 @@ def ai_admin_menu_kb() -> InlineKeyboardMarkup:
     builder.row(InlineKeyboardButton(text="🌿 AI branches", callback_data="ai_admin:branches"))
     builder.row(InlineKeyboardButton(text="⏰ Followups", callback_data="ai_admin:followups"))
     return builder.as_markup()
+
+
+def start_main_menu_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="📊 Reports", callback_data="main:reports"))
+    builder.row(InlineKeyboardButton(text="🤖 AI Seller", callback_data="main:ai"))
+    builder.row(InlineKeyboardButton(text="👤 Profiles", callback_data="main:profiles"))
+    builder.row(InlineKeyboardButton(text="⚙ Global AI Templates", callback_data="main:templates"))
+    builder.row(InlineKeyboardButton(text="❓ Help", callback_data="main:help"))
+    return builder.as_markup()
+
+
+def profile_hub_kb(profile_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="📊 Report Settings", callback_data=f"profile_report:{profile_id}"))
+    builder.row(InlineKeyboardButton(text="🤖 AI Settings", callback_data=f"profile_ai:{profile_id}"))
+    builder.row(InlineKeyboardButton(text="🗑 Delete", callback_data=f"profile_delete:{profile_id}"))
+    builder.row(InlineKeyboardButton(text="⬅ Back", callback_data="profiles_back"))
+    return builder.as_markup()
+
+
+def ai_settings_kb(profile_id: int, enabled: bool) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for text, action in (
+        ("🧠 Prompt", "prompt"),
+        ("📩 Follow-ups", "followups"),
+        ("🚦 Anti-Spam", "antispam"),
+        ("🛑 Stop Words", "stopwords"),
+        ("👥 Employees", "employees"),
+        ("📄 Summary", "summary"),
+        ("📊 Limits", "limits"),
+    ):
+        builder.row(InlineKeyboardButton(text=text, callback_data=f"profile_ai_menu:{profile_id}:{action}"))
+    toggle = "🔌 Disable AI" if enabled else "🔌 Enable AI"
+    builder.row(InlineKeyboardButton(text=toggle, callback_data=f"profile_ai_toggle:{profile_id}"))
+    builder.row(InlineKeyboardButton(text="⬅ Back", callback_data=f"profile_view:{profile_id}"))
+    return builder.as_markup()
+
+
+def profiles_for_ai_kb(profile_ids: list[int], current_profile_id: int | None = None) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for profile_id in profile_ids:
+        prefix = "✅" if current_profile_id == profile_id else "⬜"
+        builder.row(InlineKeyboardButton(text=f"{prefix} Profile #{profile_id}", callback_data=f"ai_profile:select:{profile_id}"))
+    builder.row(InlineKeyboardButton(text="↩️ К режимам", callback_data="ai_mode:menu"))
+    return builder.as_markup()

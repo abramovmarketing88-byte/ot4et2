@@ -1,40 +1,25 @@
-"""AI mode handlers: /mode, branch selection and chat flow."""
+"""Profile-centric AI mode handlers."""
+import json
 import logging
 import re
 from datetime import datetime, timedelta
-from typing import Any
 
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards import ai_branches_kb, mode_select_kb
+from bot.keyboards import mode_select_kb, profiles_for_ai_kb
 from bot.states import AiSellerStates
-from core.database.models import (
-    AIBranch,
-    AIDialogMessage,
-    AIDialogState,
-    FollowupChain,
-    FollowupStep,
-    PromptTemplate,
-    ScheduledFollowup,
-    User,
-)
+from core.database.models import AIDialogMessage, AIDialogState, AISettings, FollowupStep, ScheduledFollowup, User
 from core.llm.client import LLMClient
 
 logger = logging.getLogger(__name__)
 router = Router(name="ai_mode")
 
-# Russian phone: +7/8, optional spaces/dashes/parens, 10 digits
 _PHONE_RE = re.compile(r"\+?7?\s*\(?\d{3}\)?\s*\d{3}[-\s]?\d{2}[-\s]?\d{2}")
-# Negative intent phrases (lowercase)
-_NEGATIVE_PHRASES = (
-    "не интересно", "не надо", "отстань", "отвали", "хватит", "плохо", "ужас",
-    "кошмар", "не буду", "не хочу", "не нужен", "не нужна", "не нужно",
-)
 
 
 def _detect_phone(text: str) -> str | None:
@@ -44,9 +29,15 @@ def _detect_phone(text: str) -> str | None:
     return re.sub(r"\D", "", m.group(0))[-10:] or None
 
 
-def _detect_negative(text: str) -> bool:
-    lower = text.lower()
-    return any(p in lower for p in _NEGATIVE_PHRASES)
+def _detect_negative(text: str, ai: AISettings) -> bool:
+    phrases = ["не интересно", "не надо", "не буду", "не хочу"]
+    if ai.negative_phrases:
+        try:
+            phrases.extend(json.loads(ai.negative_phrases))
+        except Exception:
+            pass
+    low = text.lower()
+    return any(p.lower() in low for p in phrases)
 
 
 async def _get_user(telegram_id: int, session: AsyncSession) -> User | None:
@@ -61,11 +52,9 @@ async def cmd_mode(message: Message, session: AsyncSession, state: FSMContext) -
     if not user:
         await message.answer("Сначала выполните /start")
         return
-    mode_label = "ИИ-продавец" if user.current_mode == "ai_seller" else "Отчётность"
-    await message.answer(
-        f"Текущий режим: <b>{mode_label}</b>\n\nВыберите режим работы:",
-        reply_markup=mode_select_kb(user.current_mode),
-    )
+    await message.answer("Выберите режим работы:", reply_markup=mode_select_kb(user.current_mode))
+
+
 
 
 @router.callback_query(F.data == "ai_mode:menu")
@@ -75,13 +64,8 @@ async def cb_mode_menu(callback: CallbackQuery, session: AsyncSession, state: FS
     if not user:
         await callback.answer("Сначала выполните /start", show_alert=True)
         return
-    mode_label = "ИИ-продавец" if user.current_mode == "ai_seller" else "Отчётность"
-    await callback.message.edit_text(
-        f"Текущий режим: <b>{mode_label}</b>\n\nВыберите режим работы:",
-        reply_markup=mode_select_kb(user.current_mode),
-    )
+    await callback.message.edit_text("Выберите режим работы:", reply_markup=mode_select_kb(user.current_mode))
     await callback.answer()
-
 
 @router.callback_query(F.data.startswith("ai_mode:set:"))
 async def cb_mode_set(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
@@ -93,40 +77,32 @@ async def cb_mode_set(callback: CallbackQuery, session: AsyncSession, state: FSM
     user.current_mode = mode
     await state.clear()
     if mode == "ai_seller":
-        result = await session.execute(
-            select(AIBranch.id, AIBranch.name).where(AIBranch.owner_id == callback.from_user.id)
-        )
-        branches = list(result.all())
+        rows = await session.execute(select(AISettings.profile_id).where(AISettings.is_enabled == True))
+        enabled_ids = {r[0] for r in rows.all()}
+        from core.database.models import AvitoProfile
+        own_rows = await session.execute(select(AvitoProfile.id).where(AvitoProfile.owner_id == callback.from_user.id))
+        profile_ids = [r[0] for r in own_rows.all() if r[0] in enabled_ids]
         await state.set_state(AiSellerStates.choosing_branch)
-        await callback.message.edit_text(
-            "Режим ИИ-продавец активирован. Выберите ветку:",
-            reply_markup=ai_branches_kb(branches, user.current_branch_id),
-        )
+        await callback.message.edit_text("ИИ режим включен. Выберите профиль:", reply_markup=profiles_for_ai_kb(profile_ids, user.current_branch_id))
     else:
-        await callback.message.edit_text(
-            "Режим отчётности активирован.",
-            reply_markup=mode_select_kb(user.current_mode),
-        )
+        await callback.message.edit_text("Режим отчётности активирован.", reply_markup=mode_select_kb(user.current_mode))
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("ai_branch:select:"))
-async def cb_select_branch(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    branch_id = int(callback.data.split(":")[2])
+@router.callback_query(F.data.startswith("ai_profile:select:"))
+async def cb_select_profile(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    profile_id = int(callback.data.split(":")[2])
     user = await _get_user(callback.from_user.id, session)
     if not user:
         await callback.answer("Сначала выполните /start", show_alert=True)
         return
-    result = await session.execute(
-        select(AIBranch).where(AIBranch.id == branch_id, AIBranch.owner_id == callback.from_user.id)
-    )
-    branch = result.scalar_one_or_none()
-    if not branch:
-        await callback.answer("Ветка не найдена", show_alert=True)
+    ai = await session.get(AISettings, profile_id)
+    if not ai:
+        await callback.answer("AI настройки не найдены", show_alert=True)
         return
-    user.current_branch_id = branch.id
+    user.current_branch_id = profile_id
     await state.set_state(AiSellerStates.chatting)
-    await callback.message.edit_text(f"Выбрана ветка: <b>{branch.name}</b>\nОтправьте сообщение.")
+    await callback.message.edit_text(f"Выбран профиль #{profile_id}. Отправьте сообщение.")
     await callback.answer()
 
 
@@ -135,149 +111,72 @@ async def ai_chat_message(message: Message, session: AsyncSession) -> None:
     if not message.from_user:
         return
     text = (message.text or "").strip()
-    if text.startswith("/"):
+    if not text or text.startswith("/"):
         return
+
     user = await _get_user(message.from_user.id, session)
     if not user or user.current_mode != "ai_seller" or not user.current_branch_id:
         return
 
-    result = await session.execute(
-        select(AIBranch).where(
-            AIBranch.id == user.current_branch_id,
-            AIBranch.owner_id == message.from_user.id,
-        )
-    )
-    branch = result.scalar_one_or_none()
-    if not branch:
-        await message.answer("Ветка не найдена. Выберите ветку через /mode")
+    profile_id = user.current_branch_id
+    ai = await session.get(AISettings, profile_id)
+    if not ai or not ai.is_enabled:
+        await message.answer("AI отключен для профиля.")
         return
 
-    user_id = message.from_user.id
-    dialog_id = "default"
-
-    # 1) Store user message
-    session.add(
-        AIDialogMessage(
-            user_id=user_id,
-            branch_id=branch.id,
-            dialog_id=dialog_id,
-            role="user",
-            content=text,
-            created_at=datetime.utcnow(),
-        )
-    )
-
-    # 2) Get or create dialog_state, update last_client_message_at, phone, negative
-    state_res = await session.execute(
-        select(AIDialogState).where(
-            AIDialogState.user_id == user_id,
-            AIDialogState.branch_id == branch.id,
-            AIDialogState.dialog_id == dialog_id,
-        )
-    )
-    dialog_state = state_res.scalar_one_or_none()
-    if dialog_state is None:
-        dialog_state = AIDialogState(
-            user_id=user_id,
-            branch_id=branch.id,
-            dialog_id=dialog_id,
-            is_converted=False,
-            has_negative=False,
-            phone_number=None,
-            last_client_message_at=None,
-        )
-        session.add(dialog_state)
-
     now = datetime.utcnow()
-    dialog_state.last_client_message_at = now
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    daily_count = await session.scalar(select(func.count()).select_from(AIDialogMessage).where(AIDialogMessage.profile_id == profile_id, AIDialogMessage.role == "user", AIDialogMessage.created_at >= day_start))
+    if daily_count and daily_count >= ai.daily_dialog_limit and ai.block_on_limit:
+        return
+
+    per_minute_count = await session.scalar(select(func.count()).select_from(AIDialogMessage).where(AIDialogMessage.profile_id == profile_id, AIDialogMessage.role == "user", AIDialogMessage.created_at >= now - timedelta(minutes=1)))
+    if per_minute_count and per_minute_count >= ai.messages_per_minute_limit:
+        await message.answer("Слишком много сообщений. Подождите немного.")
+        return
+
+    dialog_id = "default"
+    session.add(AIDialogMessage(user_id=message.from_user.id, profile_id=profile_id, dialog_id=dialog_id, role="user", content=text, created_at=now))
+
+    state_row = await session.get(AIDialogState, {"user_id": message.from_user.id, "profile_id": profile_id, "dialog_id": dialog_id})
+    just_started = False
+    if state_row is None:
+        state_row = AIDialogState(user_id=message.from_user.id, profile_id=profile_id, dialog_id=dialog_id)
+        session.add(state_row)
+        just_started = True
+
+    state_row.last_client_message_at = now
     phone = _detect_phone(text)
     if phone:
-        dialog_state.is_converted = True
-        dialog_state.phone_number = phone
-    if _detect_negative(text):
-        dialog_state.has_negative = True
-
-    # Persist user message + dialog state before network calls.
-    await session.commit()
-
-    # 3) Build context (retention_days, max_messages)
-    context_query = select(AIDialogMessage).where(
-        AIDialogMessage.user_id == user_id,
-        AIDialogMessage.branch_id == branch.id,
-        AIDialogMessage.dialog_id == dialog_id,
-    )
-    if branch.context_retention_days is not None:
-        context_query = context_query.where(
-            AIDialogMessage.created_at >= now - timedelta(days=branch.context_retention_days)
-        )
-    context_query = context_query.order_by(desc(AIDialogMessage.created_at))
-    if branch.max_messages_in_context is not None:
-        context_query = context_query.limit(branch.max_messages_in_context)
-    ctx_res = await session.execute(context_query)
-    ctx_messages = list(reversed(ctx_res.scalars().all()))
-    dialog_context = [{"role": m.role, "content": m.content} for m in ctx_messages]
-
-    # 4) System prompt
-    prompt_res = await session.execute(
-        select(PromptTemplate).where(PromptTemplate.id == branch.system_prompt_id)
-    )
-    prompt_template = prompt_res.scalar_one_or_none()
-    system_prompt = prompt_template.content if prompt_template else ""
-
-    # Keep LLM call outside active DB transaction.
-    await session.commit()
-
-    # 5) LLM
-    llm_client = LLMClient()
-    messages: list[dict[str, Any]] = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.extend(dialog_context)
-    answer = await llm_client.generate_reply(branch=branch, messages=messages)
-
-    # 6) Store assistant reply
-    session.add(
-        AIDialogMessage(
-            user_id=user_id,
-            branch_id=branch.id,
-            dialog_id=dialog_id,
-            role="assistant",
-            content=answer,
-            created_at=datetime.utcnow(),
-        )
-    )
-
-    if branch.followup_enabled:
-        chains_res = await session.execute(
-            select(FollowupChain).where(
-                FollowupChain.branch_id == branch.id,
-                FollowupChain.is_active == True,
-                FollowupChain.start_event == "dialog_started",
-            )
-        )
-        chains = list(chains_res.scalars().all())
-        if chains:
-            chain_ids = [c.id for c in chains]
-            steps_res = await session.execute(
-                select(FollowupStep)
-                .where(FollowupStep.chain_id.in_(chain_ids))
-                .order_by(FollowupStep.chain_id.asc(), FollowupStep.order_index.asc())
-            )
-            for step in steps_res.scalars().all():
-                session.add(
-                    ScheduledFollowup(
-                        user_id=user_id,
-                        branch_id=branch.id,
-                        chain_id=step.chain_id,
-                        step_id=step.id,
-                        dialog_id=dialog_id,
-                        execute_at=datetime.utcnow() + timedelta(seconds=step.delay_seconds),
-                        status="pending",
-                        converted=dialog_state.is_converted,
-                        negative_detected=dialog_state.has_negative,
-                    )
-                )
+        state_row.is_converted = True
+        state_row.phone_number = phone
+    if _detect_negative(text, ai):
+        state_row.has_negative = True
 
     await session.commit()
+
+    context_q = select(AIDialogMessage).where(AIDialogMessage.user_id == message.from_user.id, AIDialogMessage.profile_id == profile_id, AIDialogMessage.dialog_id == dialog_id)
+    if ai.context_retention_days:
+        context_q = context_q.where(AIDialogMessage.created_at >= now - timedelta(days=ai.context_retention_days))
+    context_q = context_q.order_by(desc(AIDialogMessage.created_at))
+    if ai.max_messages_in_context:
+        context_q = context_q.limit(ai.max_messages_in_context)
+    ctx = list(reversed((await session.execute(context_q)).scalars().all()))
+    messages = [{"role": "system", "content": ai.system_prompt or ""}] + [{"role": m.role, "content": m.content} for m in ctx]
+
+    llm = LLMClient()
+    answer = await llm.generate_reply(ai, messages)
+
+    session.add(AIDialogMessage(user_id=message.from_user.id, profile_id=profile_id, dialog_id=dialog_id, role="assistant", content=answer, created_at=datetime.utcnow()))
+    await session.commit()
+
+    if just_started:
+        steps = (await session.execute(select(FollowupStep).where(FollowupStep.profile_id == profile_id, FollowupStep.is_active == True).order_by(FollowupStep.order_index.asc()))).scalars().all()
+        for step in steps:
+            session.add(ScheduledFollowup(user_id=message.from_user.id, profile_id=profile_id, step_id=step.id, dialog_id=dialog_id, execute_at=datetime.utcnow() + timedelta(seconds=step.delay_seconds), status="pending", converted=state_row.is_converted, negative_detected=state_row.has_negative))
+        await session.commit()
+
+    if ai.summary_mode != "off" and (state_row.is_converted or (ai.stop_on_negative and state_row.has_negative)) and ai.summary_target_chat_id:
+        await message.bot.send_message(ai.summary_target_chat_id, f"Summary profile={profile_id} converted={state_row.is_converted} negative={state_row.has_negative}")
 
     await message.answer(answer)

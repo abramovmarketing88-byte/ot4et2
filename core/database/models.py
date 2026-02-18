@@ -58,6 +58,9 @@ class AvitoProfile(Base):
     report_tasks: Mapped[list["ReportTask"]] = relationship(
         "ReportTask", back_populates="profile"
     )
+    ai_settings: Mapped[Optional["AISettings"]] = relationship(
+        "AISettings", back_populates="profile", uselist=False
+    )
 
 
 class ReportTask(Base):
@@ -98,24 +101,41 @@ class PromptTemplate(Base):
     )
 
 
-class AIBranch(Base):
-    __tablename__ = "ai_branches"
+class AISettings(Base):
+    __tablename__ = "ai_settings"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    owner_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE")
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("avito_profiles.id", ondelete="CASCADE"), primary_key=True
     )
-    name: Mapped[str] = mapped_column(String(255))
-    avito_profile_id: Mapped[int] = mapped_column(
-        ForeignKey("avito_profiles.id", ondelete="CASCADE")
-    )
-    gpt_model: Mapped[str] = mapped_column(String(20))
-    system_prompt_id: Mapped[int] = mapped_column(
-        ForeignKey("prompt_templates.id", ondelete="RESTRICT")
-    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    model_alias: Mapped[str] = mapped_column(String(40), default="gpt-4o-mini")
     context_retention_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     max_messages_in_context: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    followup_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    daily_dialog_limit: Mapped[int] = mapped_column(Integer, default=50)
+    per_dialog_message_limit: Mapped[int] = mapped_column(Integer, default=20)
+    messages_per_minute_limit: Mapped[int] = mapped_column(Integer, default=10)
+    cooldown_after_n_messages: Mapped[int] = mapped_column(Integer, default=5)
+    cooldown_minutes: Mapped[int] = mapped_column(Integer, default=2)
+    block_on_limit: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    stop_words: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    negative_phrases: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    stop_on_negative: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    summary_mode: Mapped[str] = mapped_column(String(30), default="off")
+    summary_timeout_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    summary_message_threshold: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    summary_target_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    summary_include_phone: Mapped[bool] = mapped_column(Boolean, default=True)
+    summary_include_transcript: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    employee_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notify_employee_on_conversion: Mapped[bool] = mapped_column(Boolean, default=False)
+    delegate_on_stop: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    profile: Mapped["AvitoProfile"] = relationship("AvitoProfile", back_populates="ai_settings")
 
 
 class AIDialogMessage(Base):
@@ -125,8 +145,8 @@ class AIDialogMessage(Base):
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE")
     )
-    branch_id: Mapped[int] = mapped_column(
-        ForeignKey("ai_branches.id", ondelete="CASCADE")
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("avito_profiles.id", ondelete="CASCADE")
     )
     dialog_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(20))
@@ -134,35 +154,19 @@ class AIDialogMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class FollowupChain(Base):
-    __tablename__ = "followup_chains"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    branch_id: Mapped[int] = mapped_column(
-        ForeignKey("ai_branches.id", ondelete="CASCADE")
-    )
-    name: Mapped[str] = mapped_column(String(255))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    start_event: Mapped[str] = mapped_column(String(30))
-    stop_on_conversion: Mapped[bool] = mapped_column(Boolean, default=True)
-
-
 class FollowupStep(Base):
     __tablename__ = "followup_steps"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    chain_id: Mapped[int] = mapped_column(
-        ForeignKey("followup_chains.id", ondelete="CASCADE")
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("avito_profiles.id", ondelete="CASCADE")
     )
     order_index: Mapped[int] = mapped_column(Integer)
     delay_seconds: Mapped[int] = mapped_column(Integer)
     send_mode: Mapped[str] = mapped_column(String(50))
     content_type: Mapped[str] = mapped_column(String(20))
-    fixed_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    prompt_template_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("prompt_templates.id", ondelete="SET NULL"), nullable=True
-    )
-    target_channel: Mapped[str] = mapped_column(String(30))
+    content_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class ScheduledFollowup(Base):
@@ -172,11 +176,8 @@ class ScheduledFollowup(Base):
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE")
     )
-    branch_id: Mapped[int] = mapped_column(
-        ForeignKey("ai_branches.id", ondelete="CASCADE")
-    )
-    chain_id: Mapped[int] = mapped_column(
-        ForeignKey("followup_chains.id", ondelete="CASCADE")
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("avito_profiles.id", ondelete="CASCADE")
     )
     step_id: Mapped[int] = mapped_column(
         ForeignKey("followup_steps.id", ondelete="CASCADE")
@@ -194,8 +195,8 @@ class AIDialogState(Base):
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), primary_key=True
     )
-    branch_id: Mapped[int] = mapped_column(
-        ForeignKey("ai_branches.id", ondelete="CASCADE"), primary_key=True
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("avito_profiles.id", ondelete="CASCADE"), primary_key=True
     )
     dialog_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     is_converted: Mapped[bool] = mapped_column(Boolean, default=False)
