@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     AVITO_CLIENT_SECRET: str = ""
     AVITO_REDIRECT_URI: str = ""
     ADMIN_CHAT_ID: int | None = None
+    LLM_API_KEY: str = ""
 
     # Worker: retry и таймауты (опционально через env)
     WORKER_STARTUP_TIMEOUT_SEC: int = 60
@@ -46,3 +47,11 @@ except Exception as e:
     print(f">>> DEBUG: SETTINGS ERROR: {e}", file=sys.stderr, flush=True)
     logger.exception("Failed to load settings from environment")
     raise
+
+
+LLM_MODEL_MAP: dict[str, str] = {
+    "gpt-mini": "gpt-4o-mini",
+    "gpt-mid": "gpt-4.1-mini",
+    "gpt-optimal": "gpt-4.1",
+    "gpt-pro": "gpt-4.1",
+}

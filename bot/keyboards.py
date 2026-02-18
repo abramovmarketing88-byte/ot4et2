@@ -246,3 +246,34 @@ def report_period_kb(profile_id: int, current: str = "day") -> InlineKeyboardMar
         )
     )
     return builder.as_markup()
+
+
+def mode_select_kb(current_mode: str = "reporting") -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    ai_prefix = "✅" if current_mode == "ai_seller" else "⬜"
+    rep_prefix = "✅" if current_mode == "reporting" else "⬜"
+    builder.row(InlineKeyboardButton(text=f"{ai_prefix} ИИ-продавец", callback_data="ai_mode:set:ai_seller"))
+    builder.row(InlineKeyboardButton(text=f"{rep_prefix} Отчётность", callback_data="ai_mode:set:reporting"))
+    return builder.as_markup()
+
+
+def ai_branches_kb(branches: list[tuple[int, str]], current_branch_id: int | None = None) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for branch_id, name in branches:
+        prefix = "✅" if current_branch_id == branch_id else "⬜"
+        builder.row(
+            InlineKeyboardButton(
+                text=f"{prefix} {name}",
+                callback_data=f"ai_branch:select:{branch_id}",
+            )
+        )
+    builder.row(InlineKeyboardButton(text="↩️ К режимам", callback_data="ai_mode:menu"))
+    return builder.as_markup()
+
+
+def ai_admin_menu_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="🧩 Prompt templates", callback_data="ai_admin:prompts"))
+    builder.row(InlineKeyboardButton(text="🌿 AI branches", callback_data="ai_admin:branches"))
+    builder.row(InlineKeyboardButton(text="⏰ Followups", callback_data="ai_admin:followups"))
+    return builder.as_markup()

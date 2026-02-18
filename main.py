@@ -51,6 +51,8 @@ try:
     from bot.handlers.profiles import router as profiles_router
     from bot.handlers.reports import router as reports_router
     from bot.handlers.settings import router as settings_router
+    from bot.handlers.ai_mode import router as ai_mode_router
+    from bot.handlers.ai_admin import router as ai_admin_router
     from bot.middleware import DbSessionMiddleware
     from core.database.session import async_engine, init_db
     from core.scheduler import start_scheduler, stop_scheduler
@@ -66,6 +68,10 @@ BOT_COMMANDS = [
     BotCommand(command="settings", description="Настройка времени и частоты отчётов"),
     BotCommand(command="stats", description="В группе: получить отчёт в этот чат"),
     BotCommand(command="cancel", description="Отменить текущее действие"),
+    BotCommand(command="mode", description="Переключить режим: ИИ-продавец/Отчётность"),
+    BotCommand(command="prompts", description="ИИ: шаблоны промптов"),
+    BotCommand(command="ai_branches", description="ИИ: ветки"),
+    BotCommand(command="followups", description="ИИ: фоллоу-апы"),
 ]
 
 
@@ -145,6 +151,8 @@ async def _create_bot_and_dispatcher():
 
     dp.errors.register(error_handler)
     dp.include_router(register_router)
+    dp.include_router(ai_mode_router)
+    dp.include_router(ai_admin_router)
     dp.include_router(profiles_router)
     dp.include_router(reports_router)
     dp.include_router(settings_router)
