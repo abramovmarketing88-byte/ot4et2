@@ -61,6 +61,7 @@ try:
     from bot.middleware import DbSessionMiddleware
     from core.database.session import async_engine, init_db
     from core.scheduler import start_scheduler, stop_scheduler
+    from core.avito.webhook_server import start_webhook_server, stop_webhook_server
 except Exception as e:
     print(f">>> DEBUG: IMPORT ERROR: {e}", flush=True)
     logger.exception("Failed during module imports")
@@ -78,6 +79,8 @@ BOT_COMMANDS = [
     BotCommand(command="ai_branches", description="ИИ: ветки"),
     BotCommand(command="followups", description="ИИ: фоллоу-апы"),
 ]
+
+_webhook_runner = None
 
 
 def _mask_db_url(url: str) -> str:
@@ -100,6 +103,12 @@ async def on_startup(bot: Bot) -> None:
     await bot.set_my_commands(BOT_COMMANDS)
     await init_db()
     await start_scheduler(bot)  # запуск APScheduler + первичный sync_scheduler_tasks()
+    # Webhook server for Avito Messenger (optional)
+    global _webhook_runner
+    try:
+        _webhook_runner = await start_webhook_server()
+    except Exception as exc:
+        logger.exception("Failed to start Avito webhook server: %s", exc)
     logger.info("Бот запущен, планировщик активен.")
 
 
@@ -107,6 +116,12 @@ async def on_shutdown(bot: Bot) -> None:
     """Остановка планировщика и закрытие соединений."""
     await stop_scheduler()
     await async_engine.dispose()
+    global _webhook_runner
+    try:
+        await stop_webhook_server(_webhook_runner)
+    except Exception as exc:
+        logger.exception("Failed to stop Avito webhook server: %s", exc)
+    _webhook_runner = None
     logger.info("Бот остановлен, соединения закрыты.")
 
 
