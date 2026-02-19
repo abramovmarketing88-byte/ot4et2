@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Any, Sequence
 
-from core.config import LLM_MODEL_MAP, settings
+from core.config import LLM_MODEL_MAP, get_llm_api_key, settings
 from core.database.models import AISettings
 
 logger = logging.getLogger(__name__)
@@ -14,9 +14,7 @@ logger = logging.getLogger(__name__)
 
 class LLMClient:
     def __init__(self, api_key: str | None = None) -> None:
-        self.api_key = (
-            (api_key or settings.LLM_API_KEY or getattr(settings, "OPENAI_API_KEY", None) or "")
-        ).strip()
+        self.api_key = (api_key or get_llm_api_key()).strip()
 
     def resolve_model(self, model_alias: str) -> str:
         if model_alias == "gpt-4o-mini":

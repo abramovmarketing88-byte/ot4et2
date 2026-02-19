@@ -1,5 +1,6 @@
 """Конфигурация из переменных окружения."""
 import logging
+import os
 import sys
 
 from pydantic import field_validator
@@ -55,6 +56,14 @@ except Exception as e:
     print(f">>> DEBUG: SETTINGS ERROR: {e}", file=sys.stderr, flush=True)
     logger.exception("Failed to load settings from environment")
     raise
+
+
+def get_llm_api_key() -> str:
+    """Ключ OpenAI: из settings или напрямую из os.environ (для Railway)."""
+    key = (getattr(settings, "LLM_API_KEY", "") or getattr(settings, "OPENAI_API_KEY", "") or "").strip()
+    if key:
+        return key
+    return (os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip()
 
 
 LLM_MODEL_MAP: dict[str, str] = {
