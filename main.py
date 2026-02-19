@@ -49,7 +49,10 @@ try:
     from bot.errors import global_error_handler
     from bot.handlers.register import router as register_router
     from bot.handlers.integrations import router as integrations_router
-    from bot.handlers.telegram_integration import router as telegram_integration_router
+    from bot.handlers.telegram_integration import (
+        on_business_connection_update,
+        router as telegram_integration_router,
+    )
     from bot.handlers.profiles import router as profiles_router
     from bot.handlers.reports import router as reports_router
     from bot.handlers.settings import router as settings_router
@@ -152,6 +155,10 @@ async def _create_bot_and_dispatcher():
         await global_error_handler(event, bot)
 
     dp.errors.register(error_handler)
+    def _filter_business_connection(event):  # noqa: B011
+        return getattr(event, "business_connection", None) is not None
+
+    dp.update.register(on_business_connection_update, _filter_business_connection)
     dp.include_router(register_router)
     dp.include_router(integrations_router)
     dp.include_router(telegram_integration_router)

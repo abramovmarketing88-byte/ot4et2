@@ -323,12 +323,9 @@ async def cb_tg_int_business(
 
 
 # ─── Сохранение business_connection при апдейте ───────────────────────────────
-
-def _has_business_connection(update: Update) -> bool:
-    return getattr(update, "business_connection", None) is not None
+# Обработчик регистрируется в main.py на dp.update (у Router нет метода update в aiogram 3).
 
 
-@router.update(_has_business_connection)
 async def on_business_connection_update(
     update: Update, session: AsyncSession
 ) -> None:
