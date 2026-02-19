@@ -22,3 +22,6 @@ openpyxl>=3.1.0
 # Config
 pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
+
+# LLM (OpenAI API)
+openai>=1.0.0

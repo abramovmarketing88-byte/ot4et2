@@ -288,6 +288,31 @@ async def cb_ai_set_prompt(callback: CallbackQuery, session: AsyncSession) -> No
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("ai_set:prompt_full:"))
+async def cb_ai_set_prompt_full(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Отправить полный текст промпта отдельным сообщением (части при длине > 4000)."""
+    try:
+        profile_id = int(callback.data.split(":")[2])
+    except (IndexError, ValueError):
+        await callback.answer("Ошибка.", show_alert=True)
+        return
+    pair = await _get_profile_ai(callback.from_user.id, profile_id, session)
+    if not pair:
+        await callback.answer("Профиль не найден.", show_alert=True)
+        return
+    _, ai = pair
+    full_text = (ai.system_prompt or "").strip()
+    if not full_text:
+        await callback.answer("Промпт пуст.", show_alert=True)
+        return
+    chunk_size = 4000
+    for i in range(0, len(full_text), chunk_size):
+        chunk = full_text[i : i + chunk_size]
+        prefix = "🧠 <b>Основной промпт (полностью)</b>:\n\n" if i == 0 else ""
+        await callback.message.answer(prefix + chunk)
+    await callback.answer("Отправлено.")
+
+
 @router.callback_query(F.data.startswith("ai_set:prompt_edit:"))
 async def cb_ai_set_prompt_edit(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:

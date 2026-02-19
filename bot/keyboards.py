@@ -429,6 +429,7 @@ def _back_to_hub(profile_id: int) -> InlineKeyboardMarkup:
 
 def ai_set_prompt_kb(profile_id: int) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="📄 Посмотреть полностью", callback_data=f"ai_set:prompt_full:{profile_id}"))
     b.row(InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"ai_set:prompt_edit:{profile_id}"))
     b.row(InlineKeyboardButton(text="📚 Выбрать из шаблонов", callback_data=f"ai_set:prompt_tpl:{profile_id}"))
     b.row(InlineKeyboardButton(text="📂 Загрузить .txt файл", callback_data=f"ai_set:prompt_file:{profile_id}"))
