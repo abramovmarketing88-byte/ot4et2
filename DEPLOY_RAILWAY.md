@@ -60,9 +60,11 @@
 | `DATABASE_URL`       | Да          | URL PostgreSQL в формате `postgresql+asyncpg://user:pass@host:port/dbname` |
 | `AVITO_CLIENT_ID`    | Да*         | Client ID приложения Avito |
 | `AVITO_CLIENT_SECRET`| Да*         | Client Secret приложения Avito |
+| `LLM_API_KEY`        | Нет**       | Ключ OpenAI для ИИ-режима («ИИ-продавец»). Без него ИИ-чат не будет отвечать через модель. |
 | `ADMIN_CHAT_ID`      | Нет         | Ваш Telegram chat_id для уведомлений об ошибках |
 
-\* Нужны для работы с API Avito (профили, отчёты).
+\* Нужны для работы с API Avito (профили, отчёты).  
+\** Нужен для работы ИИ-режима (ответы через OpenAI). Получить ключ: [OpenAI API Keys](https://platform.openai.com/api-keys). В Railway: **Variables** → **New Variable** → имя `LLM_API_KEY`, значение — ваш API key (начинается с `sk-...`). После сохранения перезапустите сервис (Redeploy или Restart).
 
 **Как подставить DATABASE_URL из PostgreSQL сервиса Railway:**
 
@@ -71,6 +73,16 @@
 3. Вставить полученное значение в переменную `DATABASE_URL` сервиса бота.
 
 Либо в Railway можно добавить переменную вручную и в значении использовать ссылку на переменную другой службы (если ваш план это поддерживает).
+
+**Как добавить ключ OpenAI для ИИ-режима:**
+
+1. Получите API key на [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+2. В Railway откройте ваш сервис бота → вкладка **Variables**.
+3. Нажмите **New Variable** (или **+ Add Variable**).
+4. Имя: `LLM_API_KEY`, значение: вставьте ключ (строка вида `sk-proj-...`).
+5. Сохраните. При необходимости нажмите **Redeploy** или **Restart**, чтобы бот подхватил переменную.
+
+После этого в режиме «ИИ-продавец» бот будет отправлять запросы в OpenAI и отвечать пользователям.
 
 ---
 
@@ -137,8 +149,8 @@
 
 1. Репозиторий с ботом в Git.
 2. Railway: New Project → PostgreSQL + сервис из GitHub (или Empty Service).
-3. В сервисе бота: `BOT_TOKEN`, `DATABASE_URL` (postgresql**+asyncpg**://...), `AVITO_CLIENT_ID`, `AVITO_CLIENT_SECRET`, при желании `ADMIN_CHAT_ID`.
-4. Start Command: `alembic upgrade head && python main.py`.
+3. В сервисе бота: `BOT_TOKEN`, `DATABASE_URL` (postgresql**+asyncpg**://...), `AVITO_CLIENT_ID`, `AVITO_CLIENT_SECRET`; при желании `ADMIN_CHAT_ID`, для ИИ-режима — `LLM_API_KEY` (ключ OpenAI).
+4. Start Command: оставить по умолчанию или `./run.sh`.
 5. Deploy → проверить логи и бота в Telegram.
 6. Не запускайте бота с тем же токеном нигде ещё (ни локально, ни на другом сервере) — иначе будет конфликт и отчёты не будут приходить.
 
