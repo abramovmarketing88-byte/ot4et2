@@ -357,10 +357,19 @@ def ai_settings_kb(profile_id: int, enabled: bool) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def profiles_for_ai_kb(profile_ids: list[int], current_profile_id: int | None = None) -> InlineKeyboardMarkup:
+def profiles_for_ai_kb(
+    profiles: list[AvitoProfile],
+    current_profile_id: int | None = None,
+) -> InlineKeyboardMarkup:
+    """Клавиатура выбора профиля в ИИ-режиме (те же профили, что и в /profiles)."""
     builder = InlineKeyboardBuilder()
-    for profile_id in profile_ids:
-        prefix = "✅" if current_profile_id == profile_id else "⬜"
-        builder.row(InlineKeyboardButton(text=f"{prefix} Профиль #{profile_id}", callback_data=f"ai_profile:select:{profile_id}"))
+    for p in profiles:
+        prefix = "✅" if current_profile_id == p.id else "⬜"
+        builder.row(
+            InlineKeyboardButton(
+                text=f"{prefix} 📊 {p.profile_name}",
+                callback_data=f"ai_profile:select:{p.id}",
+            )
+        )
     builder.row(InlineKeyboardButton(text="↩️ К режимам", callback_data="ai_mode:menu"))
     return builder.as_markup()

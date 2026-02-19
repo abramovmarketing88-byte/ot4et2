@@ -13,7 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards import mode_select_kb, profiles_for_ai_kb
 from bot.states import AiSellerStates
-from core.database.models import AIDialogMessage, AIDialogState, AISettings, FollowupStep, ScheduledFollowup, User
+from core.database.models import (
+    AIDialogMessage,
+    AIDialogState,
+    AISettings,
+    AvitoProfile,
+    FollowupStep,
+    ScheduledFollowup,
+    User,
+)
 from core.llm.client import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -77,13 +85,16 @@ async def cb_mode_set(callback: CallbackQuery, session: AsyncSession, state: FSM
     user.current_mode = mode
     await state.clear()
     if mode == "ai_seller":
-        rows = await session.execute(select(AISettings.profile_id).where(AISettings.is_enabled == True))
-        enabled_ids = {r[0] for r in rows.all()}
-        from core.database.models import AvitoProfile
-        own_rows = await session.execute(select(AvitoProfile.id).where(AvitoProfile.owner_id == callback.from_user.id))
-        profile_ids = [r[0] for r in own_rows.all() if r[0] in enabled_ids]
+        # Same resolution as /profiles: profiles by owner_id == telegram_id (no ai_settings filter)
+        profiles_result = await session.execute(
+            select(AvitoProfile).where(AvitoProfile.owner_id == callback.from_user.id)
+        )
+        profiles = list(profiles_result.scalars().all())
         await state.set_state(AiSellerStates.choosing_branch)
-        await callback.message.edit_text("ИИ режим включен. Выберите профиль:", reply_markup=profiles_for_ai_kb(profile_ids, user.current_branch_id))
+        await callback.message.edit_text(
+            "ИИ режим включен. Выберите профиль:",
+            reply_markup=profiles_for_ai_kb(profiles, user.current_branch_id),
+        )
     else:
         await callback.message.edit_text("Режим отчётности активирован.", reply_markup=mode_select_kb(user.current_mode))
     await callback.answer()
@@ -96,13 +107,26 @@ async def cb_select_profile(callback: CallbackQuery, session: AsyncSession, stat
     if not user:
         await callback.answer("Сначала выполните /start", show_alert=True)
         return
-    ai = await session.get(AISettings, profile_id)
-    if not ai:
-        await callback.answer("Настройки AI не найдены", show_alert=True)
+    # Ownership: profile must belong to current user (same as /profiles)
+    profile_row = await session.execute(
+        select(AvitoProfile).where(
+            AvitoProfile.id == profile_id,
+            AvitoProfile.owner_id == callback.from_user.id,
+        )
+    )
+    profile = profile_row.scalar_one_or_none()
+    if not profile:
+        await callback.answer("Профиль не найден.", show_alert=True)
         return
+    # Lazy-create AISettings if missing (defaults: is_enabled False, model_alias gpt-4o-mini)
+    ai = await session.get(AISettings, profile_id)
+    if ai is None:
+        ai = AISettings(profile_id=profile_id, is_enabled=False, model_alias="gpt-4o-mini")
+        session.add(ai)
+        await session.flush()
     user.current_branch_id = profile_id
     await state.set_state(AiSellerStates.chatting)
-    await callback.message.edit_text(f"Выбран профиль #{profile_id}. Отправьте сообщение.")
+    await callback.message.edit_text(f"Выбран профиль: <b>{profile.profile_name}</b>. Отправьте сообщение.")
     await callback.answer()
 
 
