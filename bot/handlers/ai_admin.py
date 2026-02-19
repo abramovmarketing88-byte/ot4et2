@@ -24,12 +24,12 @@ def _is_admin(user_id: int, chat_id: int | None = None) -> bool:
 
 @router.message(Command("ai_branches"))
 async def cmd_ai_branches_compat(message: Message) -> None:
-    await message.answer("AI branches удалены. Используйте 🤖 AI Settings внутри профиля (/profiles).")
+    await message.answer("AI-ветки удалены. Используйте 🤖 «Настройки AI» внутри профиля (/profiles).")
 
 
 @router.message(Command("followups"))
 async def cmd_followups_compat(message: Message) -> None:
-    await message.answer("Followup chains удалены. Используйте 📩 Follow-ups внутри AI Settings профиля.")
+    await message.answer("Цепочки фоллоу-апов удалены. Используйте 📩 «Фоллоу-апы» в настройках AI профиля.")
 
 
 @router.message(Command("prompts"))
@@ -46,9 +46,9 @@ async def cmd_prompts(message: Message, session: AsyncSession, state: FSMContext
             builder.button(text=f"✏️ {p.name}", callback_data=f"ai_prompt:edit:{p.id}"),  # type: ignore[arg-type]
             builder.button(text="🗑 Удалить", callback_data=f"ai_prompt:delete:{p.id}"),  # type: ignore[arg-type]
         )
-    builder.row(builder.button(text="➕ Новый prompt", callback_data="ai_prompt:new"))  # type: ignore[arg-type]
+    builder.row(builder.button(text="➕ Новый промпт", callback_data="ai_prompt:new"))  # type: ignore[arg-type]
     text = "\n".join([f"#{p.id} [{p.scope}] {p.name}" for p in rows]) or "Пусто"
-    await message.answer(f"<b>Prompt templates</b>\n{text}", reply_markup=builder.as_markup())
+    await message.answer(f"<b>Шаблоны промптов</b>\n{text}", reply_markup=builder.as_markup())
 
 
 @router.callback_query(F.data == "ai_prompt:new")
@@ -74,7 +74,7 @@ async def prompts_scope(message: Message, state: FSMContext) -> None:
 async def prompts_name(message: Message, state: FSMContext) -> None:
     await state.update_data(name=message.text.strip())
     await state.set_state(PromptAdminStates.waiting_content)
-    await message.answer("Введите содержимое prompt:")
+    await message.answer("Введите содержимое промпта:")
 
 
 @router.message(PromptAdminStates.waiting_content, F.text)
@@ -83,4 +83,4 @@ async def prompts_content(message: Message, session: AsyncSession, state: FSMCon
     prompt = PromptTemplate(owner_id=message.from_user.id, scope=data["scope"], name=data["name"], content=message.text)
     session.add(prompt)
     await state.clear()
-    await message.answer("✅ Prompt сохранён")
+    await message.answer("✅ Промпт сохранён")

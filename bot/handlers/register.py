@@ -33,7 +33,7 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) 
     telegram_id = message.from_user.id if message.from_user else 0
     await get_or_create_user(telegram_id, session)
     await message.answer(
-        "👋 <b>Добро пожаловать в Avito Analytics Bot!</b>\n\nВыберите раздел:",
+        "👋 <b>Добро пожаловать в бот аналитики Avito!</b>\n\nВыберите раздел:",
         reply_markup=start_main_menu_kb(),
     )
 
@@ -49,13 +49,13 @@ async def cb_main_help(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "main:reports")
 async def cb_main_reports(callback: CallbackQuery) -> None:
-    await callback.message.edit_text("Откройте /profiles и выберите Report Settings", reply_markup=start_main_menu_kb())
+    await callback.message.edit_text("Откройте /profiles и выберите «Настройки отчёта»", reply_markup=start_main_menu_kb())
     await callback.answer()
 
 
 @router.callback_query(F.data == "main:ai")
 async def cb_main_ai(callback: CallbackQuery) -> None:
-    await callback.message.edit_text("Откройте /mode для AI Seller режима.", reply_markup=mode_select_kb("ai_seller"))
+    await callback.message.edit_text("Откройте /mode для режима AI-продавца.", reply_markup=mode_select_kb("ai_seller"))
     await callback.answer()
 
 
@@ -67,5 +67,5 @@ async def cb_main_profiles(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "main:templates")
 async def cb_main_templates(callback: CallbackQuery) -> None:
-    await callback.message.edit_text("Global AI Templates: используйте /prompts", reply_markup=start_main_menu_kb())
+    await callback.message.edit_text("Глобальные AI-шаблоны: используйте /prompts", reply_markup=start_main_menu_kb())
     await callback.answer()

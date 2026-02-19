@@ -331,7 +331,7 @@ async def cb_export_messenger(
         if not chats_data:
             await status_msg.edit_text(
                 "📭 Чатов не найдено или API не вернул данные. "
-                "Проверьте доступ к Messenger API и scope."
+                "Проверьте доступ к Messenger API и область прав (scope)."
             )
             return
 
@@ -387,7 +387,7 @@ async def cb_profile_ai(callback: CallbackQuery, session: AsyncSession) -> None:
         ai = AISettings(profile_id=profile_id)
         session.add(ai)
         await session.flush()
-    await callback.message.edit_text("🤖 AI Settings", reply_markup=ai_settings_kb(profile_id, ai.is_enabled))
+    await callback.message.edit_text("🤖 Настройки AI", reply_markup=ai_settings_kb(profile_id, ai.is_enabled))
     await callback.answer()
 
 
@@ -408,7 +408,7 @@ async def cb_profile_ai_toggle(callback: CallbackQuery, session: AsyncSession) -
         rows = await session.execute(select(ScheduledFollowup).where(ScheduledFollowup.profile_id == profile_id, ScheduledFollowup.status == "pending"))
         for item in rows.scalars().all():
             item.status = "canceled"
-    await callback.message.edit_text("🤖 AI Settings", reply_markup=ai_settings_kb(profile_id, ai.is_enabled))
+    await callback.message.edit_text("🤖 Настройки AI", reply_markup=ai_settings_kb(profile_id, ai.is_enabled))
     await callback.answer()
 
 
@@ -416,4 +416,4 @@ async def cb_profile_ai_toggle(callback: CallbackQuery, session: AsyncSession) -
 async def cb_profile_ai_menu(callback: CallbackQuery) -> None:
     _, profile_id, section = callback.data.split(":", 2)
     await callback.answer()
-    await callback.message.answer(f"Раздел {section} для профиля #{profile_id} пока в текстовом режиме. Используйте /prompts для шаблонов.")
+    await callback.message.answer(f"Раздел {section} для профиля #{profile_id} пока работает в текстовом режиме. Используйте /prompts для шаблонов.")

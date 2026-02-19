@@ -98,7 +98,7 @@ async def cb_select_profile(callback: CallbackQuery, session: AsyncSession, stat
         return
     ai = await session.get(AISettings, profile_id)
     if not ai:
-        await callback.answer("AI настройки не найдены", show_alert=True)
+        await callback.answer("Настройки AI не найдены", show_alert=True)
         return
     user.current_branch_id = profile_id
     await state.set_state(AiSellerStates.chatting)
@@ -121,7 +121,7 @@ async def ai_chat_message(message: Message, session: AsyncSession) -> None:
     profile_id = user.current_branch_id
     ai = await session.get(AISettings, profile_id)
     if not ai or not ai.is_enabled:
-        await message.answer("AI отключен для профиля.")
+        await message.answer("AI отключён для профиля.")
         return
 
     now = datetime.utcnow()
@@ -177,6 +177,6 @@ async def ai_chat_message(message: Message, session: AsyncSession) -> None:
         await session.commit()
 
     if ai.summary_mode != "off" and (state_row.is_converted or (ai.stop_on_negative and state_row.has_negative)) and ai.summary_target_chat_id:
-        await message.bot.send_message(ai.summary_target_chat_id, f"Summary profile={profile_id} converted={state_row.is_converted} negative={state_row.has_negative}")
+        await message.bot.send_message(ai.summary_target_chat_id, f"Сводка: профиль={profile_id} конвертирован={state_row.is_converted} негатив={state_row.has_negative}")
 
     await message.answer(answer)
