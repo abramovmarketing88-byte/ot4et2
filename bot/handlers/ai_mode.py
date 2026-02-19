@@ -187,6 +187,7 @@ async def cb_ai_profile_test_chat(callback: CallbackQuery, session: AsyncSession
         session.add(ai)
         await session.flush()
     user.current_branch_id = profile_id
+    user.current_mode = "ai_seller"
     await state.set_state(AiSellerStates.chatting)
     await callback.message.edit_text(
         f"💬 Тест-чат — <b>{profile.profile_name}</b>. Отправьте сообщение."
