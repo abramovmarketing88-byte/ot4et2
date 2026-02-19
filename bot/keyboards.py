@@ -357,6 +357,27 @@ def ai_settings_kb(profile_id: int, enabled: bool) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def ai_profile_hub_kb(profile_id: int, _profile_name: str, enabled: bool) -> InlineKeyboardMarkup:
+    """Клавиатура хаба настроек ИИ по профилю (экран после выбора профиля в ИИ-режиме)."""
+    builder = InlineKeyboardBuilder()
+    for text, action in (
+        ("🧠 Основной промпт", "prompt"),
+        ("📩 Фоллоу-апы", "followups"),
+        ("🚦 Антиспам", "antispam"),
+        ("🛑 Стоп-слова", "stopwords"),
+        ("👥 Сотрудники", "employees"),
+        ("📄 Саммари", "summary"),
+        ("📊 Лимиты", "limits"),
+        ("🤖 Модель", "model"),
+    ):
+        builder.row(InlineKeyboardButton(text=text, callback_data=f"profile_ai_menu:{profile_id}:{action}"))
+    toggle = "🔌 Выключить AI" if enabled else "🔌 Включить AI"
+    builder.row(InlineKeyboardButton(text=toggle, callback_data=f"profile_ai_toggle:{profile_id}"))
+    builder.row(InlineKeyboardButton(text="💬 Тест-чат", callback_data=f"ai_profile:test_chat:{profile_id}"))
+    builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data="ai_profile:back_to_list"))
+    return builder.as_markup()
+
+
 def profiles_for_ai_kb(
     profiles: list[AvitoProfile],
     current_profile_id: int | None = None,
@@ -371,5 +392,5 @@ def profiles_for_ai_kb(
                 callback_data=f"ai_profile:select:{p.id}",
             )
         )
-    builder.row(InlineKeyboardButton(text="↩️ К режимам", callback_data="ai_mode:menu"))
+    builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data="ai_mode:menu"))
     return builder.as_markup()

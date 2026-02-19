@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards import mode_select_kb, profiles_for_ai_kb
+from bot.keyboards import ai_profile_hub_kb, mode_select_kb, profiles_for_ai_kb
 from bot.states import AiSellerStates
 from core.database.models import (
     AIDialogMessage,
@@ -92,7 +92,7 @@ async def cb_mode_set(callback: CallbackQuery, session: AsyncSession, state: FSM
         profiles = list(profiles_result.scalars().all())
         await state.set_state(AiSellerStates.choosing_branch)
         await callback.message.edit_text(
-            "ИИ режим включен. Выберите профиль:",
+            "Выберите профиль для настройки ИИ:",
             reply_markup=profiles_for_ai_kb(profiles, user.current_branch_id),
         )
     else:
@@ -107,7 +107,6 @@ async def cb_select_profile(callback: CallbackQuery, session: AsyncSession, stat
     if not user:
         await callback.answer("Сначала выполните /start", show_alert=True)
         return
-    # Ownership: profile must belong to current user (same as /profiles)
     profile_row = await session.execute(
         select(AvitoProfile).where(
             AvitoProfile.id == profile_id,
@@ -118,7 +117,55 @@ async def cb_select_profile(callback: CallbackQuery, session: AsyncSession, stat
     if not profile:
         await callback.answer("Профиль не найден.", show_alert=True)
         return
-    # Lazy-create AISettings if missing (defaults: is_enabled False, model_alias gpt-4o-mini)
+    ai = await session.get(AISettings, profile_id)
+    if ai is None:
+        ai = AISettings(profile_id=profile_id, is_enabled=False, model_alias="gpt-4o-mini")
+        session.add(ai)
+        await session.flush()
+    user.current_branch_id = profile_id
+    await state.clear()
+    await callback.message.edit_text(
+        f"🤖 ИИ-продавец — профиль: <b>{profile.profile_name}</b>",
+        reply_markup=ai_profile_hub_kb(profile_id, profile.profile_name, ai.is_enabled),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "ai_profile:back_to_list")
+async def cb_ai_profile_back_to_list(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    await state.clear()
+    user = await _get_user(callback.from_user.id, session)
+    if not user:
+        await callback.answer("Сначала выполните /start", show_alert=True)
+        return
+    profiles_result = await session.execute(
+        select(AvitoProfile).where(AvitoProfile.owner_id == callback.from_user.id)
+    )
+    profiles = list(profiles_result.scalars().all())
+    await callback.message.edit_text(
+        "Выберите профиль для настройки ИИ:",
+        reply_markup=profiles_for_ai_kb(profiles, user.current_branch_id),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("ai_profile:test_chat:"))
+async def cb_ai_profile_test_chat(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    profile_id = int(callback.data.split(":")[2])
+    user = await _get_user(callback.from_user.id, session)
+    if not user:
+        await callback.answer("Сначала выполните /start", show_alert=True)
+        return
+    profile_row = await session.execute(
+        select(AvitoProfile).where(
+            AvitoProfile.id == profile_id,
+            AvitoProfile.owner_id == callback.from_user.id,
+        )
+    )
+    profile = profile_row.scalar_one_or_none()
+    if not profile:
+        await callback.answer("Профиль не найден.", show_alert=True)
+        return
     ai = await session.get(AISettings, profile_id)
     if ai is None:
         ai = AISettings(profile_id=profile_id, is_enabled=False, model_alias="gpt-4o-mini")
@@ -126,7 +173,9 @@ async def cb_select_profile(callback: CallbackQuery, session: AsyncSession, stat
         await session.flush()
     user.current_branch_id = profile_id
     await state.set_state(AiSellerStates.chatting)
-    await callback.message.edit_text(f"Выбран профиль: <b>{profile.profile_name}</b>. Отправьте сообщение.")
+    await callback.message.edit_text(
+        f"💬 Тест-чат — <b>{profile.profile_name}</b>. Отправьте сообщение."
+    )
     await callback.answer()
 
 
