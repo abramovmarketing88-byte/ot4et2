@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     AVITO_REDIRECT_URI: str = ""
     ADMIN_CHAT_ID: int | None = None
     LLM_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""  # альтернатива LLM_API_KEY (стандартное имя в OpenAI)
 
     # Worker: retry и таймауты (опционально через env)
     WORKER_STARTUP_TIMEOUT_SEC: int = 60

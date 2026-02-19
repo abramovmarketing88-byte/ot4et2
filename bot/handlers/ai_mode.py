@@ -1120,7 +1120,14 @@ async def cb_ai_set_model_confirm(callback: CallbackQuery, session: AsyncSession
     _, ai = pair
     ai.model_alias = "gpt-4o-mini"
     await callback.answer("✅ gpt-4o-mini.")
-    await cb_ai_set_model(callback, session)
+    try:
+        await callback.message.edit_text(
+            "🤖 <b>Модель</b>\n\nДоступна только gpt-4o-mini.",
+            reply_markup=ai_set_model_kb(profile_id),
+        )
+    except Exception as e:
+        if "not modified" not in str(e).lower():
+            raise
 
 
 @router.callback_query(F.data.startswith("ai_set:followups:"))

@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 class LLMClient:
     def __init__(self, api_key: str | None = None) -> None:
-        self.api_key = (api_key or settings.LLM_API_KEY or "").strip()
+        self.api_key = (
+            (api_key or settings.LLM_API_KEY or getattr(settings, "OPENAI_API_KEY", None) or "")
+        ).strip()
 
     def resolve_model(self, model_alias: str) -> str:
         if model_alias == "gpt-4o-mini":

@@ -100,6 +100,14 @@ async def on_startup(bot: Bot) -> None:
     """Инициализация при старте: меню команд, БД, планировщик и синхронизация джобов отчётов."""
     from core.config import settings
     logger.info("DATABASE_URL (async): %s", _mask_db_url(settings.DATABASE_URL))
+    llm_key = (getattr(settings, "LLM_API_KEY", "") or getattr(settings, "OPENAI_API_KEY", "") or "").strip()
+    if not llm_key:
+        logger.warning(
+            "LLM_API_KEY и OPENAI_API_KEY не заданы — в тест-чате будет заглушка (stub). "
+            "Добавьте LLM_API_KEY или OPENAI_API_KEY в Railway → Variables для сервиса worker и сделайте Redeploy."
+        )
+    else:
+        logger.info("Ключ OpenAI задан — ответы ИИ через API.")
     await bot.set_my_commands(BOT_COMMANDS)
     await init_db()
     await start_scheduler(bot)  # запуск APScheduler + первичный sync_scheduler_tasks()
