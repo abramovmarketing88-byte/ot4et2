@@ -14,8 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards import (
-    profiles_list_kb,
-    profile_actions_kb,
+    profiles_hub_kb,
     profile_hub_kb,
     ai_settings_kb,
     confirm_delete_kb,
@@ -69,34 +68,34 @@ def format_profile_info(p: AvitoProfile) -> str:
 # /profiles — список профилей
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
+async def render_profiles_hub(
+    event: Message | CallbackQuery,
+    session: AsyncSession,
+) -> None:
+    """Рендер главного экрана профилей."""
+    telegram_id = event.from_user.id
+    profiles = await get_user_profiles(telegram_id, session)
+    text = "Ваши профили Avito:"
+    markup = profiles_hub_kb(profiles)
+
+    if isinstance(event, CallbackQuery):
+        await event.message.edit_text(text, reply_markup=markup)
+        await event.answer()
+    else:
+        await event.answer(text, reply_markup=markup)
+
+
 @router.message(Command("profiles"))
 async def cmd_profiles(message: Message, session: AsyncSession) -> None:
-    """Показать список профилей с inline-кнопками."""
-    profiles = await get_user_profiles(message.from_user.id, session)
-    if not profiles:
-        await message.answer(
-            "У вас пока нет профилей Avito.\n"
-            "Используйте /add_profile для добавления."
-        )
-        return
-    await message.answer(
-        "📋 <b>Ваши профили Avito:</b>",
-        reply_markup=profiles_list_kb(profiles),
-    )
+    """Показать главный экран профилей."""
+    await render_profiles_hub(message, session)
 
 
 @router.callback_query(F.data == "profiles_back")
 async def cb_profiles_back(callback: CallbackQuery, session: AsyncSession) -> None:
-    """Вернуться к списку профилей."""
-    profiles = await get_user_profiles(callback.from_user.id, session)
-    if not profiles:
-        await callback.message.edit_text("У вас нет профилей.")
-        return
-    await callback.message.edit_text(
-        "📋 <b>Ваши профили Avito:</b>",
-        reply_markup=profiles_list_kb(profiles),
-    )
-    await callback.answer()
+    """Вернуться к главному экрану профилей."""
+    await render_profiles_hub(callback, session)
 
 
 @router.callback_query(F.data.startswith("profile_view:"))

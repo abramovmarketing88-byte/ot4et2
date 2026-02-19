@@ -17,7 +17,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards import report_settings_kb, report_characteristics_kb, set_chat_kb, cancel_kb
+from bot.keyboards import (
+    report_settings_kb,
+    report_characteristics_kb,
+    set_chat_kb,
+    cancel_kb,
+    reports_profiles_kb,
+    reports_no_profiles_kb,
+)
 from bot.states import ConfigureReportStates, HistoricalReportStates
 from core.database.models import AvitoProfile, ReportTask
 from core.report_runner import run_combined_report_to_chat, run_report_to_chat
@@ -88,6 +95,28 @@ def format_report_settings(profile: AvitoProfile, task: ReportTask | None) -> st
         f"Статус: {active_status}\n"
         f"{char_line}"
     )
+
+
+async def render_reports_entry(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Открыть вход в раздел отчётов через кнопки."""
+    result = await session.execute(
+        select(AvitoProfile).where(AvitoProfile.owner_id == callback.from_user.id)
+    )
+    profiles = list(result.scalars().all())
+
+    if not profiles:
+        await callback.message.edit_text(
+            "Чтобы открыть отчёты, сначала добавьте профиль.",
+            reply_markup=reports_no_profiles_kb(),
+        )
+        await callback.answer()
+        return
+
+    await callback.message.edit_text(
+        "Выберите профиль для отчётов:",
+        reply_markup=reports_profiles_kb(profiles),
+    )
+    await callback.answer()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

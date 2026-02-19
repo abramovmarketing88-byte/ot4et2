@@ -22,6 +22,47 @@ def profiles_list_kb(profiles: list[AvitoProfile]) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def profiles_hub_kb(profiles: list[AvitoProfile]) -> InlineKeyboardMarkup:
+    """Главный экран профилей из основного меню."""
+    builder = InlineKeyboardBuilder()
+    for p in profiles:
+        builder.row(
+            InlineKeyboardButton(
+                text=f"📊 {p.profile_name}",
+                callback_data=f"profile_view:{p.id}",
+            )
+        )
+    builder.row(
+        InlineKeyboardButton(text="➕ Добавить профиль", callback_data="profile_add")
+    )
+    builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data="main:menu"))
+    return builder.as_markup()
+
+
+def reports_profiles_kb(profiles: list[AvitoProfile]) -> InlineKeyboardMarkup:
+    """Выбор профиля для перехода в настройки отчётов."""
+    builder = InlineKeyboardBuilder()
+    for p in profiles:
+        builder.row(
+            InlineKeyboardButton(
+                text=f"📊 {p.profile_name}",
+                callback_data=f"profile_report:{p.id}",
+            )
+        )
+    builder.row(InlineKeyboardButton(text="👤 Профили", callback_data="main:profiles"))
+    builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data="main:menu"))
+    return builder.as_markup()
+
+
+def reports_no_profiles_kb() -> InlineKeyboardMarkup:
+    """Кнопки для экрана отчётов, когда профилей нет."""
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="➕ Добавить профиль", callback_data="profile_add"))
+    builder.row(InlineKeyboardButton(text="👤 Профили", callback_data="main:profiles"))
+    builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data="main:menu"))
+    return builder.as_markup()
+
+
 def profile_actions_kb(profile_id: int) -> InlineKeyboardMarkup:
     """Кнопки действий для профиля (Account section)."""
     builder = InlineKeyboardBuilder()

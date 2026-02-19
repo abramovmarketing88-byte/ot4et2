@@ -8,6 +8,8 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.handlers.profiles import render_profiles_hub
+from bot.handlers.reports import render_reports_entry
 from bot.keyboards import mode_select_kb, start_main_menu_kb
 from core.database.models import User
 
@@ -48,9 +50,8 @@ async def cb_main_help(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data == "main:reports")
-async def cb_main_reports(callback: CallbackQuery) -> None:
-    await callback.message.edit_text("Откройте /profiles и выберите «Настройки отчёта»", reply_markup=start_main_menu_kb())
-    await callback.answer()
+async def cb_main_reports(callback: CallbackQuery, session: AsyncSession) -> None:
+    await render_reports_entry(callback, session)
 
 
 @router.callback_query(F.data == "main:ai")
@@ -60,8 +61,16 @@ async def cb_main_ai(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data == "main:profiles")
-async def cb_main_profiles(callback: CallbackQuery) -> None:
-    await callback.message.edit_text("Откройте /profiles для управления профилями.", reply_markup=start_main_menu_kb())
+async def cb_main_profiles(callback: CallbackQuery, session: AsyncSession) -> None:
+    await render_profiles_hub(callback, session)
+
+
+@router.callback_query(F.data == "main:menu")
+async def cb_main_menu(callback: CallbackQuery) -> None:
+    await callback.message.edit_text(
+        "👋 <b>Добро пожаловать в бот аналитики Avito!</b>\n\nВыберите раздел:",
+        reply_markup=start_main_menu_kb(),
+    )
     await callback.answer()
 
 
