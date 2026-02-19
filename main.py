@@ -48,6 +48,8 @@ try:
 
     from bot.errors import global_error_handler
     from bot.handlers.register import router as register_router
+    from bot.handlers.integrations import router as integrations_router
+    from bot.handlers.telegram_integration import router as telegram_integration_router
     from bot.handlers.profiles import router as profiles_router
     from bot.handlers.reports import router as reports_router
     from bot.handlers.settings import router as settings_router
@@ -151,6 +153,8 @@ async def _create_bot_and_dispatcher():
 
     dp.errors.register(error_handler)
     dp.include_router(register_router)
+    dp.include_router(integrations_router)
+    dp.include_router(telegram_integration_router)
     dp.include_router(ai_mode_router)
     dp.include_router(ai_admin_router)
     dp.include_router(profiles_router)

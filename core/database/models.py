@@ -113,6 +113,13 @@ class AISettings(Base):
     context_retention_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     max_messages_in_context: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
+    context_mode: Mapped[str] = mapped_column(String(20), default="last_n")
+    context_value: Mapped[int] = mapped_column(Integer, default=20)
+    message_mode: Mapped[str] = mapped_column(String(20), default="single")
+    message_sentences_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    response_delay_seconds: Mapped[int] = mapped_column(Integer, default=10)
+    min_pause_seconds: Mapped[int] = mapped_column(Integer, default=0)
+
     daily_dialog_limit: Mapped[int] = mapped_column(Integer, default=50)
     per_dialog_message_limit: Mapped[int] = mapped_column(Integer, default=20)
     messages_per_minute_limit: Mapped[int] = mapped_column(Integer, default=10)
@@ -134,6 +141,9 @@ class AISettings(Base):
     employee_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     notify_employee_on_conversion: Mapped[bool] = mapped_column(Boolean, default=False)
     delegate_on_stop: Mapped[bool] = mapped_column(Boolean, default=False)
+    stop_on_employee_message: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_return_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_return_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     profile: Mapped["AvitoProfile"] = relationship("AvitoProfile", back_populates="ai_settings")
 
@@ -203,3 +213,36 @@ class AIDialogState(Base):
     has_negative: Mapped[bool] = mapped_column(Boolean, default=False)
     phone_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     last_client_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    ai_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class TelegramTarget(Base):
+    __tablename__ = "telegram_targets"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE")
+    )
+    target_chat_id: Mapped[int] = mapped_column(BigInteger)
+    title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    welcome_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TelegramBusinessConnection(Base):
+    __tablename__ = "telegram_business_connections"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE")
+    )
+    connection_id: Mapped[str] = mapped_column(String(255), unique=True)
+    business_user_id: Mapped[int] = mapped_column(BigInteger)
+    user_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    is_disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    recipients_scope: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

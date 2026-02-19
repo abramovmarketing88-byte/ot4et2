@@ -325,8 +325,49 @@ def start_main_menu_kb() -> InlineKeyboardMarkup:
     builder.row(InlineKeyboardButton(text="📊 Отчёты", callback_data="main:reports"))
     builder.row(InlineKeyboardButton(text="🤖 AI-продавец", callback_data="main:ai"))
     builder.row(InlineKeyboardButton(text="👤 Профили", callback_data="main:profiles"))
+    builder.row(InlineKeyboardButton(text="🔌 Каналы / Интеграции", callback_data="main:integrations"))
     builder.row(InlineKeyboardButton(text="⚙ Глобальные AI-шаблоны", callback_data="main:templates"))
     builder.row(InlineKeyboardButton(text="❓ Помощь", callback_data="main:help"))
+    return builder.as_markup()
+
+
+def integrations_menu_kb() -> InlineKeyboardMarkup:
+    """Экран выбора канала интеграции."""
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="🟦 Avito", callback_data="intg:avito"))
+    builder.row(InlineKeyboardButton(text="✈️ Telegram", callback_data="intg:telegram"))
+    builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data="main:menu"))
+    return builder.as_markup()
+
+
+def telegram_integration_kb() -> InlineKeyboardMarkup:
+    """Экран Telegram: бот, business, тест, назад."""
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="🤖 Подключить Telegram-бота", callback_data="tg_int:bot"))
+    builder.row(InlineKeyboardButton(text="👤 Подключить личный аккаунт (Telegram Business)", callback_data="tg_int:business"))
+    builder.row(InlineKeyboardButton(text="📄 Тест отправки", callback_data="tg_int:test_send"))
+    builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data="intg:back"))
+    return builder.as_markup()
+
+
+def telegram_bot_target_kb(target_id: int | None) -> InlineKeyboardMarkup:
+    """Кнопки для настройки целевого чата (bot mode)."""
+    builder = InlineKeyboardBuilder()
+    if target_id is not None:
+        builder.row(InlineKeyboardButton(text="✏️ Ввести chat_id", callback_data=f"tg_target:input_chat:{target_id}"))
+        builder.row(InlineKeyboardButton(text="📩 Переслать сообщение из чата", callback_data=f"tg_target:forward:{target_id}"))
+        builder.row(InlineKeyboardButton(text="📝 Тестовое сообщение", callback_data=f"tg_target:welcome_msg:{target_id}"))
+    else:
+        builder.row(InlineKeyboardButton(text="✏️ Ввести chat_id", callback_data="tg_target:input_chat:0"))
+        builder.row(InlineKeyboardButton(text="📩 Переслать сообщение из чата", callback_data="tg_target:forward:0"))
+    builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data="intg:telegram"))
+    return builder.as_markup()
+
+
+def telegram_business_status_kb() -> InlineKeyboardMarkup:
+    """Кнопки экрана статуса Business."""
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data="intg:telegram"))
     return builder.as_markup()
 
 
@@ -358,24 +399,104 @@ def ai_settings_kb(profile_id: int, enabled: bool) -> InlineKeyboardMarkup:
 
 
 def ai_profile_hub_kb(profile_id: int, _profile_name: str, enabled: bool) -> InlineKeyboardMarkup:
-    """Клавиатура хаба настроек ИИ по профилю (экран после выбора профиля в ИИ-режиме)."""
+    """Хаб настроек ИИ: 13 кнопок по ТЗ."""
     builder = InlineKeyboardBuilder()
     for text, action in (
         ("🧠 Основной промпт", "prompt"),
+        ("📚 Контекст диалога", "context"),
+        ("✍ Формат сообщений", "format"),
+        ("⏳ Задержка ответа", "delay"),
         ("📩 Фоллоу-апы", "followups"),
-        ("🚦 Антиспам", "antispam"),
+        ("🚦 Ограничения", "limits"),
         ("🛑 Стоп-слова", "stopwords"),
-        ("👥 Сотрудники", "employees"),
-        ("📄 Саммари", "summary"),
-        ("📊 Лимиты", "limits"),
+        ("👥 Чат уведомлений", "notify_chat"),
+        ("🔄 Передача управления", "handoff"),
         ("🤖 Модель", "model"),
     ):
-        builder.row(InlineKeyboardButton(text=text, callback_data=f"profile_ai_menu:{profile_id}:{action}"))
+        builder.row(InlineKeyboardButton(text=text, callback_data=f"ai_set:{action}:{profile_id}"))
     toggle = "🔌 Выключить AI" if enabled else "🔌 Включить AI"
-    builder.row(InlineKeyboardButton(text=toggle, callback_data=f"profile_ai_toggle:{profile_id}"))
+    builder.row(InlineKeyboardButton(text=toggle, callback_data=f"ai_set:toggle:{profile_id}"))
     builder.row(InlineKeyboardButton(text="💬 Тест-чат", callback_data=f"ai_profile:test_chat:{profile_id}"))
     builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data="ai_profile:back_to_list"))
     return builder.as_markup()
+
+
+def _back_to_hub(profile_id: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="⬅ Назад", callback_data=f"ai_set:back_hub:{profile_id}"))
+    return b.as_markup()
+
+
+def ai_set_prompt_kb(profile_id: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"ai_set:prompt_edit:{profile_id}"))
+    b.row(InlineKeyboardButton(text="📚 Выбрать из шаблонов", callback_data=f"ai_set:prompt_tpl:{profile_id}"))
+    b.row(InlineKeyboardButton(text="📂 Загрузить .txt файл", callback_data=f"ai_set:prompt_file:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⬅ Назад", callback_data=f"ai_set:back_hub:{profile_id}"))
+    return b.as_markup()
+
+
+def ai_set_context_kb(profile_id: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="☑ Весь контекст", callback_data=f"ai_set:ctx_all:{profile_id}"))
+    b.row(InlineKeyboardButton(text="🔢 Последние N сообщений", callback_data=f"ai_set:ctx_lastn:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⏱ За последние N часов", callback_data=f"ai_set:ctx_hours:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⬅ Назад", callback_data=f"ai_set:back_hub:{profile_id}"))
+    return b.as_markup()
+
+
+def ai_set_format_kb(profile_id: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="☑ Одним сообщением", callback_data=f"ai_set:fmt_single:{profile_id}"))
+    b.row(InlineKeyboardButton(text="🔢 Разбивать по N предложений", callback_data=f"ai_set:fmt_sentences:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⬅ Назад", callback_data=f"ai_set:back_hub:{profile_id}"))
+    return b.as_markup()
+
+
+def ai_set_delay_kb(profile_id: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="✏️ Изменить (секунды)", callback_data=f"ai_set:delay_edit:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⬅ Назад", callback_data=f"ai_set:back_hub:{profile_id}"))
+    return b.as_markup()
+
+
+def ai_set_limits_kb(profile_id: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="📨 Макс сообщений в диалоге", callback_data=f"ai_set:limit_dialog:{profile_id}"))
+    b.row(InlineKeyboardButton(text="📅 Макс диалогов в день", callback_data=f"ai_set:limit_daily:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⏳ Мин пауза между ответами (сек)", callback_data=f"ai_set:limit_pause:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⬅ Назад", callback_data=f"ai_set:back_hub:{profile_id}"))
+    return b.as_markup()
+
+
+def ai_set_stopwords_kb(profile_id: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="✏️ Задать список (через запятую)", callback_data=f"ai_set:stopwords_edit:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⬅ Назад", callback_data=f"ai_set:back_hub:{profile_id}"))
+    return b.as_markup()
+
+
+def ai_set_notify_chat_kb(profile_id: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="📩 Переслать сообщение из чата", callback_data=f"ai_set:notify_forward:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⬅ Назад", callback_data=f"ai_set:back_hub:{profile_id}"))
+    return b.as_markup()
+
+
+def ai_set_handoff_kb(profile_id: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="☑ Останавливать ИИ при сообщении сотрудника", callback_data=f"ai_set:handoff_toggle_stop:{profile_id}"))
+    b.row(InlineKeyboardButton(text="☑ Авто-возврат управления ИИ", callback_data=f"ai_set:handoff_toggle_return:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⏱ Время возврата (минуты)", callback_data=f"ai_set:handoff_minutes:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⬅ Назад", callback_data=f"ai_set:back_hub:{profile_id}"))
+    return b.as_markup()
+
+
+def ai_set_model_kb(profile_id: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="🤖 gpt-4o-mini (единственный)", callback_data=f"ai_set:model_confirm:{profile_id}"))
+    b.row(InlineKeyboardButton(text="⬅ Назад", callback_data=f"ai_set:back_hub:{profile_id}"))
+    return b.as_markup()
 
 
 def profiles_for_ai_kb(

@@ -75,3 +75,23 @@ class FollowupAdminStates(StatesGroup):
     waiting_fixed_text = State()
     waiting_prompt_template_id = State()
     waiting_target_channel = State()
+
+
+class AiSettingsStates(StatesGroup):
+    """Ввод значений в настройках ИИ по профилю."""
+    waiting_prompt_text = State()
+    waiting_context_value = State()
+    waiting_message_sentences = State()
+    waiting_delay_seconds = State()
+    waiting_limit_value = State()
+    waiting_stop_words = State()
+    waiting_forward_for_chat = State()
+    waiting_auto_return_minutes = State()
+    waiting_min_pause = State()
+
+
+class TelegramIntegrationStates(StatesGroup):
+    """Telegram интеграция: целевой чат и тестовое сообщение."""
+    waiting_chat_id = State()
+    waiting_forward = State()
+    waiting_welcome_message = State()
