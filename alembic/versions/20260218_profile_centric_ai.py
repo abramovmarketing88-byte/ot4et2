@@ -50,7 +50,7 @@ def upgrade() -> None:
         """
         INSERT INTO ai_settings (profile_id, is_enabled, system_prompt, model_alias, max_messages_in_context, context_retention_days)
         SELECT b.avito_profile_id,
-               CASE WHEN b.followup_enabled THEN 1 ELSE 1 END,
+               COALESCE(b.followup_enabled, FALSE),
                p.content,
                CASE
                  WHEN b.gpt_model='gpt-mini' THEN 'gpt-4o-mini'
