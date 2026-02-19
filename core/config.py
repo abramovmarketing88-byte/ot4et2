@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     WORKER_RETRY_BACKOFF_BASE_SEC: int = 5
     WORKER_RETRY_BACKOFF_MAX_SEC: int = 300
 
+    # Avito webhook server (messenger)
+    AVITO_WEBHOOK_ENABLED: bool = False
+    AVITO_WEBHOOK_HOST: str = "0.0.0.0"
+    AVITO_WEBHOOK_PORT: int = 8000
+    AVITO_WEBHOOK_PATH: str = "/avito/webhook"
+    AVITO_WEBHOOK_SECRET: str | None = None
+
     @field_validator("ADMIN_CHAT_ID", mode="before")
     @classmethod
     def empty_admin_chat(cls, v: str | int | None) -> int | None:

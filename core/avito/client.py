@@ -247,6 +247,37 @@ class AvitoClient:
             params={"limit": limit, "offset": offset},
         )
 
+    async def send_message_text(
+        self,
+        user_id: int,
+        chat_id: str | int,
+        text: str,
+    ) -> dict[str, Any]:
+        """
+        POST /messenger/v1/accounts/{user_id}/chats/{chat_id}/messages
+        Отправка текстового сообщения в чат.
+        """
+        payload = {"type": "text", "message": {"text": text}}
+        return await self._request(
+            "POST",
+            f"/messenger/v1/accounts/{user_id}/chats/{chat_id}/messages",
+            json=payload,
+        )
+
+    async def mark_chat_read(
+        self,
+        user_id: int,
+        chat_id: str | int,
+    ) -> dict[str, Any]:
+        """
+        POST /messenger/v1/accounts/{user_id}/chats/{chat_id}/read
+        Отметить чат прочитанным.
+        """
+        return await self._request(
+            "POST",
+            f"/messenger/v1/accounts/{user_id}/chats/{chat_id}/read",
+        )
+
     # ═══════════════════════════════════════════════════════════════════════════
     # Баланс (кошелёк, аванс) — scope user_balance:read
     # ═══════════════════════════════════════════════════════════════════════════
