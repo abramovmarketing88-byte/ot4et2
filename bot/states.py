@@ -95,3 +95,8 @@ class TelegramIntegrationStates(StatesGroup):
     waiting_chat_id = State()
     waiting_forward = State()
     waiting_welcome_message = State()
+
+
+class DailyLimitsStates(StatesGroup):
+    """Лимиты по дням: ввод лимита в рублях для выбранного дня."""
+    waiting_rub = State()

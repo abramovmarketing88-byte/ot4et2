@@ -3,10 +3,10 @@ Async SQLAlchemy 2.0 models: User, AvitoProfile, ReportTask.
 
 Все datetime в БД хранятся в UTC (см. core.timezone.utc_now).
 """
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, Time
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, Time
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -60,6 +60,33 @@ class AvitoProfile(Base):
     )
     ai_settings: Mapped[Optional["AISettings"]] = relationship(
         "AISettings", back_populates="profile", uselist=False
+    )
+    daily_limits: Mapped[Optional["ProfileDailyLimits"]] = relationship(
+        "ProfileDailyLimits", back_populates="profile", uselist=False
+    )
+
+
+class ProfileDailyLimits(Base):
+    """Суточные лимиты по дням недели (Пн–Вс) для CPX Promo. 1:1 к профилю."""
+    __tablename__ = "profile_daily_limits"
+
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("avito_profiles.id", ondelete="CASCADE"), primary_key=True
+    )
+    mon_penny: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tue_penny: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    wed_penny: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    thu_penny: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fri_penny: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sat_penny: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sun_penny: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False, default="auto_budget")
+    action_type_id: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    last_applied_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    profile: Mapped["AvitoProfile"] = relationship(
+        "AvitoProfile", back_populates="daily_limits"
     )
 
 

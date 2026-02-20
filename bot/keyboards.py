@@ -375,8 +375,47 @@ def profile_hub_kb(profile_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="📊 Настройки отчёта", callback_data=f"profile_report:{profile_id}"))
     builder.row(InlineKeyboardButton(text="🤖 Настройки AI", callback_data=f"profile_ai:{profile_id}"))
+    builder.row(InlineKeyboardButton(text="💰 Лимиты по дням", callback_data=f"profile_daily_limits:{profile_id}"))
     builder.row(InlineKeyboardButton(text="🗑 Удалить", callback_data=f"profile_delete:{profile_id}"))
     builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data="profiles_back"))
+    return builder.as_markup()
+
+
+# Дни недели: 0=Пн .. 6=Вс (для callback_data)
+WEEKDAY_NAMES = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+
+
+def daily_limits_kb(profile_id: int, mode: str) -> InlineKeyboardMarkup:
+    """Клавиатура экрана «Лимиты по дням»: дни, быстрые действия, режим, применить, назад."""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        *[
+            InlineKeyboardButton(text=WEEKDAY_NAMES[i], callback_data=f"limits_day:{profile_id}:{i}")
+            for i in range(7)
+        ]
+    )
+    builder.row(
+        InlineKeyboardButton(text="Сделать все одинаковыми", callback_data=f"limits_quick_same:{profile_id}")
+    )
+    builder.row(
+        InlineKeyboardButton(text="Скопировать Пн на все дни", callback_data=f"limits_quick_copy_mon:{profile_id}")
+    )
+    builder.row(
+        InlineKeyboardButton(text="Очистить (0 на все дни)", callback_data=f"limits_quick_clear:{profile_id}")
+    )
+    if mode == "manual":
+        builder.row(
+            InlineKeyboardButton(text="Режим: MANUAL (суточный лимит)", callback_data=f"limits_mode:{profile_id}:auto_budget")
+        )
+    else:
+        builder.row(
+            InlineKeyboardButton(text="Режим: AUTO (суточный бюджет)", callback_data=f"limits_mode:{profile_id}:manual")
+        )
+    builder.row(
+        InlineKeyboardButton(text="Применить сейчас", callback_data=f"limits_apply_now:{profile_id}"),
+        InlineKeyboardButton(text="Применить на сегодня", callback_data=f"limits_apply_today:{profile_id}"),
+    )
+    builder.row(InlineKeyboardButton(text="⬅ Назад", callback_data=f"profile_view:{profile_id}"))
     return builder.as_markup()
 
 

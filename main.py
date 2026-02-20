@@ -58,6 +58,7 @@ try:
     from bot.handlers.settings import router as settings_router
     from bot.handlers.ai_mode import router as ai_mode_router
     from bot.handlers.ai_admin import router as ai_admin_router
+    from bot.handlers.daily_limits import router as daily_limits_router
     from bot.middleware import DbSessionMiddleware
     from core.database.session import async_engine, init_db
     from core.scheduler import start_scheduler, stop_scheduler
@@ -189,6 +190,7 @@ async def _create_bot_and_dispatcher():
     dp.include_router(ai_mode_router)
     dp.include_router(ai_admin_router)
     dp.include_router(profiles_router)
+    dp.include_router(daily_limits_router)
     dp.include_router(reports_router)
     dp.include_router(settings_router)
     # Startup вызывается явно до start_polling; shutdown — при отмене задачи или при ошибке

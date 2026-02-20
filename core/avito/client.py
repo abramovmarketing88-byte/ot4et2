@@ -63,6 +63,25 @@ class AvitoClient:
             params={"status": status, "per_page": per_page, "page": page},
         )
 
+    async def get_active_item_ids(self, max_items: int = 500) -> list[int]:
+        """
+        Список ID активных объявлений (пагинация).
+        Для применения лимитов CPX Promo по профилю.
+        """
+        ids: list[int] = []
+        page = 1
+        per_page = 100
+        while len(ids) < max_items:
+            data = await self.get_items(status="active", per_page=per_page, page=page)
+            resources = data.get("resources", [])
+            for r in resources:
+                if r.get("id") is not None:
+                    ids.append(int(r["id"]))
+            if len(resources) < per_page:
+                break
+            page += 1
+        return ids[:max_items]
+
     async def get_item_info(self, user_id: int, item_id: int) -> dict[str, Any]:
         """
         GET /core/v1/accounts/{user_id}/items/{item_id}/

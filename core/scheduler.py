@@ -4,10 +4,12 @@ APScheduler: AsyncIOScheduler + SQLAlchemyJobStore.
 - SQLAlchemyJobStore MUST use a synchronous driver (no postgresql+asyncpg).
 - sync_scheduler_tasks() reads report_frequency, report_time, report_weekdays from DB
   and adds one job per active ReportTask (daily / interval / weekly).
-- Часовой пояс по умолчанию: Europe/Moscow; для задач используется profile.report_timezone.
+- Часовой пояс по умолчанию: Europe/Moscow (константа TIMEZONE ниже); для отчётов — profile.report_timezone.
+- В проде планировщик включается автоматически при старте бота (start_scheduler в main.py).
+  Job «Лимиты по дням» (23:59 Moscow): DAILY_LIMITS_JOB_ID, см. run_daily_limits_job().
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from aiogram import Bot
@@ -20,7 +22,7 @@ from sqlalchemy.orm import selectinload
 from zoneinfo import ZoneInfo
 
 from core.config import settings
-from core.database.models import AvitoProfile, ReportTask
+from core.database.models import AvitoProfile, ReportTask, ProfileDailyLimits
 from core.database.models import AIDialogMessage, AIDialogState, AISettings, FollowupStep, ScheduledFollowup
 from core.database.session import get_session
 from core.llm.client import LLMClient
@@ -32,6 +34,7 @@ TIMEZONE = "Europe/Moscow"
 REPORT_JOB_ID_PREFIX = "report_task_"
 SYNC_JOB_ID = "report_sync_tasks"
 AI_FOLLOWUP_JOB_ID = "ai_followup_processor"
+DAILY_LIMITS_JOB_ID = "daily_limits_2359"
 
 # Sync URL for SQLAlchemyJobStore: replace '+asyncpg' with '' -> standard postgresql://
 _url = settings.DATABASE_URL
@@ -249,6 +252,28 @@ async def sync_scheduler_tasks() -> None:
     logger.info("sync_scheduler_tasks: scheduled %s report job(s).", scheduled)
 
 
+async def run_daily_limits_job() -> None:
+    """
+    Ежедневно в 23:59 (Europe/Moscow): применить лимит на завтра ко всем профилям с настройками лимитов.
+    Идемпотентно: повторный запуск не ломает (повторная установка того же значения в API допустима).
+    """
+    from core.daily_limits_runner import apply_daily_limit_for_profile
+
+    tomorrow = date.today() + timedelta(days=1)
+    async with get_session() as session:
+        r = await session.execute(select(ProfileDailyLimits.profile_id))
+        profile_ids = [row[0] for row in r.all()]
+    for pid in profile_ids:
+        try:
+            ok, err, msgs = await apply_daily_limit_for_profile(pid, tomorrow)
+            if msgs:
+                logger.warning("Daily limits profile %s: %s", pid, msgs[:3])
+            else:
+                logger.info("Daily limits profile %s: applied %s, errors %s", pid, ok, err)
+        except Exception:
+            logger.exception("Daily limits job failed for profile %s", pid)
+
+
 async def start_scheduler(bot: Bot) -> None:
     """Запуск планировщика и синхронизация джобов отчётов из БД."""
     set_report_bot(bot)
@@ -274,6 +299,14 @@ async def start_scheduler(bot: Bot) -> None:
         replace_existing=True,
         max_instances=1,
         coalesce=True,
+    )
+    # Лимиты по дням: каждый день в 23:59 (Europe/Moscow) применяем лимит на завтра.
+    # TZ настраивается в TIMEZONE в этом файле; в проде планировщик включается в start_scheduler() при старте бота.
+    s.add_job(
+        run_daily_limits_job,
+        CronTrigger(hour=23, minute=59, timezone=ZoneInfo(TIMEZONE)),
+        id=DAILY_LIMITS_JOB_ID,
+        replace_existing=True,
     )
 
 
